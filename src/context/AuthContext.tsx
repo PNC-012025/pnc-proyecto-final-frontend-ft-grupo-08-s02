@@ -35,12 +35,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (data) setUser(JSON.parse(data));
     }, []);
 
-    const login = async (credentials: UsuarioLoginDTO) => {
+    {/*const login = async (credentials: UsuarioLoginDTO) => {
         const resp: LoginResponse = await loginService(credentials);
         localStorage.setItem('token', resp.token);
         localStorage.setItem('user', JSON.stringify(resp.usuario));
-        setUser(resp.usuario);
+        setUser(resp.usuario); 
+    };*/}
+
+    const login = async (credentials: UsuarioLoginDTO) => {
+        const { email, password } = credentials;
+
+        // Usuario de prueba (solo frontend)
+        if (email === 'admin@uca.edu.sv' && password === '1234') {
+            const fakeUser: Usuario = {
+                id: '1',
+                nombre: 'Admin',
+                apellido: 'Demo',
+                email,
+                rol: 'ENCARGADO',
+                codigoUsuario: 'ADM001',
+            };
+
+            localStorage.setItem('token', 'FAKE-TOKEN');
+            localStorage.setItem('user', JSON.stringify(fakeUser));
+            setUser(fakeUser);
+            return;
+        }
+
+        throw new Error('Credenciales inválidas');
     };
+
 
     const logout = () => {
         localStorage.removeItem('token');
