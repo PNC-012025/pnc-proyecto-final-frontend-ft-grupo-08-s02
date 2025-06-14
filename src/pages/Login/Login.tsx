@@ -18,7 +18,7 @@ interface FormValues {
 const slides = [
     {
         image: img1,
-        title: '¡Bienvenido!',
+        title: '¡Bienvenido a REHOSAR!',
         description: 'Inicia sesión y gestiona tus actividades fácilmente.',
     },
     {
@@ -67,9 +67,9 @@ const Login: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex flex-col lg:flex-row">
-            {/* Panel izquierdo con carrusel de imagen + texto */}
-            <div className="relative hidden lg:flex lg:w-[60%] bg-black">
+        <div className="min-h-screen flex flex-col lg:flex-row font-sans">
+            {/* Panel izquierdo con carrusel de imagen y texto */}
+            <div className="relative hidden lg:flex lg:w-[55%] bg-black shadow-xl">
                 <Carousel
                     autoPlay
                     infiniteLoop
@@ -86,12 +86,12 @@ const Login: React.FC = () => {
                             <img
                                 src={slide.image}
                                 alt={`slide-${i}`}
-                                className="object-cover w-full h-screen opacity-80"
+                                className="object-cover w-full h-screen opacity-75"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-                                <div className="text-white text-center px-8 max-w-xl">
-                                    <h2 className="text-4xl font-bold mb-4 drop-shadow-lg">{slide.title}</h2>
-                                    <p className="text-lg drop-shadow">{slide.description}</p>
+                            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                                <div className="text-white text-center px-8 max-w-xl animate-fadeInUp">
+                                    <h2 className="text-5xl font-bold mb-4 drop-shadow-lg">{slide.title}</h2>
+                                    <p className="text-lg drop-shadow text-gray-200">{slide.description}</p>
                                 </div>
                             </div>
                         </div>
@@ -100,11 +100,17 @@ const Login: React.FC = () => {
             </div>
 
             {/* Panel derecho: login */}
-            <div className="flex w-full lg:w-[40%] items-center justify-center p-8 bg-white">
-                <div className="max-w-md w-full space-y-6">
-                    <h1 className="text-3xl font-bold text-gray-800 text-center">
-                        Iniciar sesión
-                    </h1>
+            <div className="flex w-full lg:w-[45%] items-center justify-center p-6 bg-gray-50">
+                <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-2xl space-y-8 animate-fadeIn">
+                    <div className="text-center space-y-2">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-[#003c71] to-[#00509e] flex items-center justify-center shadow-md">
+                            <User className="text-white" size={28} />
+                        </div>
+                        <h1 className="text-3xl font-bold text-gray-800">Iniciar sesión</h1>
+                        <p className="text-sm text-gray-500">
+                            Accede a tu cuenta para comenzar a usar <strong>REHOSAR</strong>
+                        </p>
+                    </div>
 
                     {error && (
                         <div className="bg-red-100 text-red-600 p-2 rounded text-sm text-center">
@@ -112,7 +118,8 @@ const Login: React.FC = () => {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Input Email */}
                         <div className="relative">
                             <User className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={20} />
                             <input
@@ -123,10 +130,11 @@ const Login: React.FC = () => {
                                 required
                                 placeholder="Correo electrónico"
                                 autoFocus
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#003c71]"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
                         </div>
 
+                        {/* Input Password */}
                         <div className="relative">
                             <Lock className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={20} />
                             <input
@@ -136,10 +144,11 @@ const Login: React.FC = () => {
                                 onChange={handleChange}
                                 required
                                 placeholder="Contraseña"
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#003c71]"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
                         </div>
 
+                        {/* Remember me + link */}
                         <div className="flex items-center justify-between text-sm">
                             <label className="flex items-center space-x-2 text-gray-600">
                                 <input
@@ -156,21 +165,15 @@ const Login: React.FC = () => {
                             </Link>
                         </div>
 
+                        {/* Botón submit */}
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-[#003c71] to-[#00509e] hover:opacity-90 text-white py-2 rounded-full font-semibold transition disabled:opacity-50"
+                            className="w-full bg-gradient-to-r from-[#003c71] to-[#00509e] hover:opacity-90 text-white py-2 rounded-xl font-semibold transition disabled:opacity-50 shadow"
                         >
                             {loading ? 'Iniciando...' : 'Iniciar sesión'}
                         </button>
                     </form>
-
-                    <p className="text-center text-sm text-gray-600">
-                        ¿No tienes una cuenta?{' '}
-                        <Link to="/register" className="text-[#003c71] hover:underline">
-                            Crear una cuenta
-                        </Link>
-                    </p>
                 </div>
             </div>
         </div>
