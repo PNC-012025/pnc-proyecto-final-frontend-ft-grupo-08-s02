@@ -56,6 +56,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 codigoUsuario: 'ADM001',
             };
 
+
+
+            localStorage.setItem('token', 'FAKE-TOKEN');
+            localStorage.setItem('user', JSON.stringify(fakeUser));
+            setUser(fakeUser);
+            return;
+        }
+
+        // Usuario ESTUDIANTE de prueba
+        if (email === 'estudiante@uca.edu.sv' && password === '1234') {
+            const fakeUser: Usuario = {
+                id: '2',
+                nombre: 'Estudiante',
+                apellido: 'Ejemplo',
+                email,
+                rol: 'ESTUDIANTE',
+                codigoUsuario: 'EST001',
+            };
+
             localStorage.setItem('token', 'FAKE-TOKEN');
             localStorage.setItem('user', JSON.stringify(fakeUser));
             setUser(fakeUser);
