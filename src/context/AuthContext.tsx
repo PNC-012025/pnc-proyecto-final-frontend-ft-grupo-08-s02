@@ -1,15 +1,7 @@
-import React, {
-    createContext,
-    useState,
-    useEffect,
-} from 'react';
+
+import React, { createContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { login as loginService } from '../services/authService';
-import type {
-    UsuarioLoginDTO,
-    LoginResponse,
-    Usuario,
-} from '../types';
+import type { UsuarioLoginDTO, Usuario } from '../types';
 
 interface AuthContextProps {
     user: Usuario | null;
@@ -19,8 +11,8 @@ interface AuthContextProps {
 
 const AuthContext = createContext<AuthContextProps>({
     user: null,
-    login: async () => { },
-    logout: () => { },
+    login: async () => {},
+    logout: () => {},
 });
 
 interface AuthProviderProps {
@@ -29,13 +21,17 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<Usuario | null>(null);
+    const [loading, setLoading] = useState(true); 
 
     useEffect(() => {
         const data = localStorage.getItem('user');
-        if (data) setUser(JSON.parse(data));
+        if (data) {
+            setUser(JSON.parse(data));
+        }
+        setLoading(false); 
     }, []);
 
-    {/*const login = async (credentials: UsuarioLoginDTO) => {
+            {/*const login = async (credentials: UsuarioLoginDTO) => {
         const resp: LoginResponse = await loginService(credentials);
         localStorage.setItem('token', resp.token);
         localStorage.setItem('user', JSON.stringify(resp.usuario));
@@ -45,7 +41,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const login = async (credentials: UsuarioLoginDTO) => {
         const { email, password } = credentials;
 
-        // Usuario de prueba (solo frontend)
         if (email === 'admin@uca.edu.sv' && password === '1234') {
             const fakeUser: Usuario = {
                 id: '1',
@@ -55,16 +50,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 rol: 'ENCARGADO',
                 codigoUsuario: 'ADM001',
             };
-
-
-
             localStorage.setItem('token', 'FAKE-TOKEN');
             localStorage.setItem('user', JSON.stringify(fakeUser));
             setUser(fakeUser);
             return;
         }
 
-        // Usuario ESTUDIANTE de prueba
         if (email === 'estudiante@uca.edu.sv' && password === '1234') {
             const fakeUser: Usuario = {
                 id: '2',
@@ -74,7 +65,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 rol: 'ESTUDIANTE',
                 codigoUsuario: 'EST001',
             };
-
             localStorage.setItem('token', 'FAKE-TOKEN');
             localStorage.setItem('user', JSON.stringify(fakeUser));
             setUser(fakeUser);
@@ -84,12 +74,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Credenciales inválidas');
     };
 
-
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
     };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center min-h-screen text-[#003c71] font-semibold text-lg">
+                Cargando sesión...
+            </div>
+        );
+    }
 
     return (
         <AuthContext.Provider value={{ user, login, logout }}>
