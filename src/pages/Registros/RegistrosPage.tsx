@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useReactToPrint } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';

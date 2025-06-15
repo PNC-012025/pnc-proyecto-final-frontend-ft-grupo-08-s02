@@ -1,6 +1,19 @@
+// src/pages/Dashboard/DashboardEstudiante.tsx
+
 import React, { useState, useEffect } from 'react';
-import { BookOpen, CalendarDays, GraduationCap, Mail, School, Users, Plus, Trash2, Edit2 } from 'lucide-react';
+import {
+    BookOpen,
+    CalendarDays,
+    GraduationCap,
+    Mail,
+    School,
+    Users,
+    Plus,
+    Trash2,
+    Edit2
+} from 'lucide-react';
 import { Dialog } from '@headlessui/react';
+import useAuth from '../../hooks/useAuth';
 
 interface RegistroHora {
     id: number;
@@ -10,31 +23,33 @@ interface RegistroHora {
     actividad: string;
     aula: string;
     horasEfectivas: number;
-    estado: 'PENDIENTE' | 'APROBADO';
+    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
     estudianteId: string;
 }
 
 const calcularHoras = (inicio: string, fin: string): number => {
     const [hiH, hiM] = inicio.split(':').map(Number);
     const [hfH, hfM] = fin.split(':').map(Number);
-    const inicioMin = hiH * 60 + hiM;
-    const finMin = hfH * 60 + hfM;
-    const diff = Math.max(0, finMin - inicioMin);
+    const diff = Math.max(0, (hfH * 60 + hfM) - (hiH * 60 + hiM));
     return Math.round((diff / 60) * 100) / 100;
 };
 
 const DashboardEstudiante: React.FC = () => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const { user } = useAuth();
+    const userId = user?.id ?? '';
 
+    // Carga inicial: todos los registros de este estudiante
     const [registros, setRegistros] = useState<RegistroHora[]>(() => {
-        const data = localStorage.getItem('registros');
-        return data ? JSON.parse(data).filter((r: RegistroHora) => r.estudianteId === currentUser.id) : [];
+        const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
+        return all.filter(r => r.estudianteId === userId);
     });
 
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<RegistroHora | null>(null);
 
-    const [form, setForm] = useState<Omit<RegistroHora, 'id' | 'horasEfectivas' | 'estado' | 'estudianteId'>>({
+    const [form, setForm] = useState<
+        Omit<RegistroHora, 'id' | 'horasEfectivas' | 'estado' | 'estudianteId'>
+    >({
         fecha: '',
         horaInicio: '',
         horaFin: '',
@@ -42,38 +57,33 @@ const DashboardEstudiante: React.FC = () => {
         aula: ''
     });
 
+    // Sincroniza localStorage cada vez que cambian los registros de este estudiante
     useEffect(() => {
-        const data = localStorage.getItem('registros');
-        if (data) {
-            const allRegistros = JSON.parse(data);
-            setRegistros(allRegistros.filter((r: RegistroHora) => r.estudianteId === currentUser.id));
-        }
-    }, []);
-
-    useEffect(() => {
-        const data = localStorage.getItem('registros');
-        const all = data ? JSON.parse(data) : [];
-        const filtered = all.filter((r: RegistroHora) => r.estudianteId !== currentUser.id);
-        localStorage.setItem('registros', JSON.stringify([...filtered, ...registros]));
-    }, [registros]);
+        const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
+        const otros = all.filter(r => r.estudianteId !== userId);
+        localStorage.setItem('registros', JSON.stringify([...otros, ...registros]));
+    }, [registros, userId]);
 
     const handleSubmit = () => {
         const horasEfectivas = calcularHoras(form.horaInicio, form.horaFin);
 
         if (editing) {
             setRegistros(prev =>
-                prev.map(r => (r.id === editing.id ? { ...editing, ...form, horasEfectivas } : r))
+                prev.map(r =>
+                    r.id === editing.id ? { ...r, ...form, horasEfectivas } : r
+                )
             );
         } else {
-            const nuevoRegistro: RegistroHora = {
+            const nuevo: RegistroHora = {
                 id: Date.now(),
                 ...form,
                 horasEfectivas,
                 estado: 'PENDIENTE',
-                estudianteId: currentUser.id
+                estudianteId: userId
             };
-            setRegistros(prev => [...prev, nuevoRegistro]);
+            setRegistros(prev => [...prev, nuevo]);
         }
+
         setModalOpen(false);
         setForm({ fecha: '', horaInicio: '', horaFin: '', actividad: '', aula: '' });
         setEditing(null);
@@ -83,34 +93,50 @@ const DashboardEstudiante: React.FC = () => {
         setRegistros(prev => prev.filter(r => r.id !== id));
     };
 
-    const handleEdit = (registro: RegistroHora) => {
-        setEditing(registro);
+    const handleEdit = (reg: RegistroHora) => {
+        setEditing(reg);
         setForm({
-            fecha: registro.fecha,
-            horaInicio: registro.horaInicio,
-            horaFin: registro.horaFin,
-            actividad: registro.actividad,
-            aula: registro.aula
+            fecha: reg.fecha,
+            horaInicio: reg.horaInicio,
+            horaFin: reg.horaFin,
+            actividad: reg.actividad,
+            aula: reg.aula
         });
         setModalOpen(true);
     };
 
-    const horasAprobadas = registros.reduce((total, reg) => reg.estado === 'APROBADO' ? total + reg.horasEfectivas : total, 0);
+    // Calcula horas aprobadas del estudiante
+    const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
+    const horasAprobadas = all
+        .filter(r => r.estudianteId === userId && r.estado === 'APROBADO')
+        .reduce((sum, r) => sum + r.horasEfectivas, 0);
     const porcentaje = Math.min((horasAprobadas / 600) * 100, 100);
+
+    // Solo muestra registros con estado 'PENDIENTE'
+    const pendientes = registros.filter(r => r.estado === 'PENDIENTE');
 
     return (
         <div className="space-y-8 p-4">
+            {/* Progreso */}
             <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold text-[#003c71] mb-2">Horas sociales acumuladas</h2>
+                <h2 className="text-xl font-semibold text-[#003c71] mb-2">
+                    Horas sociales acumuladas
+                </h2>
                 <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
-                    <div className="bg-blue-600 h-4 rounded-full" style={{ width: `${porcentaje}%` }}></div>
+                    <div
+                        className="bg-blue-600 h-4 rounded-full"
+                        style={{ width: `${porcentaje}%` }}
+                    />
                 </div>
-                <p className="text-sm text-gray-600">{horasAprobadas} horas acumuladas de 600</p>
+                <p className="text-sm text-gray-600">
+                    {horasAprobadas} horas aprobadas de 600
+                </p>
             </div>
 
+            {/* Tabla de registros pendientes */}
             <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-[#003c71]">Mis registros</h2>
+                    <h2 className="text-xl font-semibold text-[#003c71]">Mis registros pendientes</h2>
                     <button
                         onClick={() => setModalOpen(true)}
                         className="flex items-center gap-2 text-sm text-white bg-[#003c71] px-4 py-2 rounded hover:bg-[#002f59]"
@@ -128,75 +154,59 @@ const DashboardEstudiante: React.FC = () => {
                             <th>Actividad</th>
                             <th>Aula</th>
                             <th>Horas efectivas</th>
-                            <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {registros.map(reg => (
-                            <tr key={reg.id} className="border-b hover:bg-gray-50">
-                                <td className="py-2">{reg.fecha}</td>
-                                <td>{reg.horaInicio}</td>
-                                <td>{reg.horaFin}</td>
-                                <td>{reg.actividad}</td>
-                                <td>{reg.aula}</td>
-                                <td>{reg.horasEfectivas}</td>
-                                <td>{reg.estado}</td>
-                                <td className="flex gap-2">
-                                    <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
-                                        <Edit2 size={16} />
-                                    </button>
-                                    <button onClick={() => handleDelete(reg.id)} className="text-red-600 hover:underline">
-                                        <Trash2 size={16} />
-                                    </button>
+                        {pendientes.length > 0 ? (
+                            pendientes.map(reg => (
+                                <tr key={reg.id} className="border-b hover:bg-gray-50">
+                                    <td className="py-2">{reg.fecha}</td>
+                                    <td>{reg.horaInicio}</td>
+                                    <td>{reg.horaFin}</td>
+                                    <td>{reg.actividad}</td>
+                                    <td>{reg.aula}</td>
+                                    <td>{reg.horasEfectivas}</td>
+                                    <td className="flex gap-2">
+                                        <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDelete(reg.id)} className="text-red-600 hover:underline">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={7} className="py-4 text-center text-gray-500">
+                                    No tienes registros pendientes.
                                 </td>
                             </tr>
-                        ))}
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold text-[#003c71] mb-4">Enlaces de interés</h2>
-                <div className="space-y-3">
-                    <a href="#" className="flex items-center gap-3 p-3 rounded bg-gray-50 hover:bg-gray-100">
-                        <BookOpen /> Biblioteca
-                    </a>
-                    <a href="#" className="flex items-center gap-3 p-3 rounded bg-gray-50 hover:bg-gray-100">
-                        <CalendarDays /> Calendario académico
-                    </a>
-                    <a href="#" className="flex items-center gap-3 p-3 rounded bg-gray-50 hover:bg-gray-100">
-                        <Users /> Directorio
-                    </a>
-                    <a href="#" className="flex items-center gap-3 p-3 rounded bg-gray-50 hover:bg-gray-100">
-                        <GraduationCap /> E-campus
-                    </a>
-                    <a href="#" className="flex items-center gap-3 p-3 rounded bg-gray-50 hover:bg-gray-100">
-                        <Mail /> Correo Electrónico
-                    </a>
-                    <a href="#" className="flex items-center gap-3 p-3 rounded bg-gray-50 hover:bg-gray-100">
-                        <School /> Servicio social
-                    </a>
-                </div>
-            </div>
-
-            <Dialog open={modalOpen} onClose={() => setModalOpen(false)} className="fixed inset-0 z-50 flex items-center justify-center">
+            {/* Modal de nuevo/editar registro */}
+            <Dialog
+                open={modalOpen}
+                onClose={() => { setModalOpen(false); setEditing(null); }}
+                className="fixed inset-0 z-50 flex items-center justify-center"
+            >
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">
                         {editing ? 'Editar registro' : 'Nuevo registro'}
                     </Dialog.Title>
                     <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            handleSubmit();
-                        }}
+                        onSubmit={e => { e.preventDefault(); handleSubmit(); }}
                         className="space-y-4"
                     >
                         <input
                             type="date"
                             className="w-full border rounded px-3 py-2"
                             value={form.fecha}
-                            onChange={(e) => setForm(prev => ({ ...prev, fecha: e.target.value }))}
+                            onChange={e => setForm(prev => ({ ...prev, fecha: e.target.value }))}
                             required
                         />
                         <div className="flex gap-2">
@@ -204,14 +214,14 @@ const DashboardEstudiante: React.FC = () => {
                                 type="time"
                                 className="w-1/2 border rounded px-3 py-2"
                                 value={form.horaInicio}
-                                onChange={(e) => setForm(prev => ({ ...prev, horaInicio: e.target.value }))}
+                                onChange={e => setForm(prev => ({ ...prev, horaInicio: e.target.value }))}
                                 required
                             />
                             <input
                                 type="time"
                                 className="w-1/2 border rounded px-3 py-2"
                                 value={form.horaFin}
-                                onChange={(e) => setForm(prev => ({ ...prev, horaFin: e.target.value }))}
+                                onChange={e => setForm(prev => ({ ...prev, horaFin: e.target.value }))}
                                 required
                             />
                         </div>
@@ -220,7 +230,7 @@ const DashboardEstudiante: React.FC = () => {
                             placeholder="Actividad realizada"
                             className="w-full border rounded px-3 py-2"
                             value={form.actividad}
-                            onChange={(e) => setForm(prev => ({ ...prev, actividad: e.target.value }))}
+                            onChange={e => setForm(prev => ({ ...prev, actividad: e.target.value }))}
                             required
                         />
                         <input
@@ -228,16 +238,13 @@ const DashboardEstudiante: React.FC = () => {
                             placeholder="Aula"
                             className="w-full border rounded px-3 py-2"
                             value={form.aula}
-                            onChange={(e) => setForm(prev => ({ ...prev, aula: e.target.value }))}
+                            onChange={e => setForm(prev => ({ ...prev, aula: e.target.value }))}
                             required
                         />
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => {
-                                    setModalOpen(false);
-                                    setEditing(null);
-                                }}
+                                onClick={() => { setModalOpen(false); setEditing(null); }}
                                 className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
                             >
                                 Cancelar
