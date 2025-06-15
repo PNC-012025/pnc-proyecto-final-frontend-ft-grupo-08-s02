@@ -10,6 +10,8 @@ interface RegistroHora {
     actividad: string;
     aula: string;
     horasEfectivas: number;
+    estado: 'PENDIENTE' | 'APROBADO';
+    estudianteId: string;
 }
 
 const calcularHoras = (inicio: string, fin: string): number => {
@@ -22,15 +24,17 @@ const calcularHoras = (inicio: string, fin: string): number => {
 };
 
 const DashboardEstudiante: React.FC = () => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
     const [registros, setRegistros] = useState<RegistroHora[]>(() => {
         const data = localStorage.getItem('registros');
-        return data ? JSON.parse(data) : [];
+        return data ? JSON.parse(data).filter((r: RegistroHora) => r.estudianteId === currentUser.id) : [];
     });
 
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<RegistroHora | null>(null);
 
-    const [form, setForm] = useState<Omit<RegistroHora, 'id' | 'horasEfectivas'>>({
+    const [form, setForm] = useState<Omit<RegistroHora, 'id' | 'horasEfectivas' | 'estado' | 'estudianteId'>>({
         fecha: '',
         horaInicio: '',
         horaFin: '',
@@ -39,20 +43,34 @@ const DashboardEstudiante: React.FC = () => {
     });
 
     useEffect(() => {
-        localStorage.setItem('registros', JSON.stringify(registros));
+        const data = localStorage.getItem('registros');
+        if (data) {
+            const allRegistros = JSON.parse(data);
+            setRegistros(allRegistros.filter((r: RegistroHora) => r.estudianteId === currentUser.id));
+        }
+    }, []);
+
+    useEffect(() => {
+        const data = localStorage.getItem('registros');
+        const all = data ? JSON.parse(data) : [];
+        const filtered = all.filter((r: RegistroHora) => r.estudianteId !== currentUser.id);
+        localStorage.setItem('registros', JSON.stringify([...filtered, ...registros]));
     }, [registros]);
 
     const handleSubmit = () => {
         const horasEfectivas = calcularHoras(form.horaInicio, form.horaFin);
 
         if (editing) {
-            const updated = registros.map(r => r.id === editing.id ? { ...editing, ...form, horasEfectivas } : r);
-            setRegistros(updated);
+            setRegistros(prev =>
+                prev.map(r => (r.id === editing.id ? { ...editing, ...form, horasEfectivas } : r))
+            );
         } else {
             const nuevoRegistro: RegistroHora = {
                 id: Date.now(),
                 ...form,
-                horasEfectivas
+                horasEfectivas,
+                estado: 'PENDIENTE',
+                estudianteId: currentUser.id
             };
             setRegistros(prev => [...prev, nuevoRegistro]);
         }
@@ -77,18 +95,19 @@ const DashboardEstudiante: React.FC = () => {
         setModalOpen(true);
     };
 
+    const horasAprobadas = registros.reduce((total, reg) => reg.estado === 'APROBADO' ? total + reg.horasEfectivas : total, 0);
+    const porcentaje = Math.min((horasAprobadas / 600) * 100, 100);
+
     return (
         <div className="space-y-8 p-4">
-            {/* Horas sociales acumuladas */}
             <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold text-[#003c71] mb-2">Horas sociales acumuladas</h2>
                 <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
-                    <div className="bg-blue-600 h-4 rounded-full" style={{ width: '16.5%' }}></div>
+                    <div className="bg-blue-600 h-4 rounded-full" style={{ width: `${porcentaje}%` }}></div>
                 </div>
-                <p className="text-sm text-gray-600">99 horas acumuladas de 600</p>
+                <p className="text-sm text-gray-600">{horasAprobadas} horas acumuladas de 600</p>
             </div>
 
-            {/* Registros recientes */}
             <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Mis registros</h2>
@@ -109,6 +128,7 @@ const DashboardEstudiante: React.FC = () => {
                             <th>Actividad</th>
                             <th>Aula</th>
                             <th>Horas efectivas</th>
+                            <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -121,6 +141,7 @@ const DashboardEstudiante: React.FC = () => {
                                 <td>{reg.actividad}</td>
                                 <td>{reg.aula}</td>
                                 <td>{reg.horasEfectivas}</td>
+                                <td>{reg.estado}</td>
                                 <td className="flex gap-2">
                                     <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
                                         <Edit2 size={16} />
@@ -135,7 +156,6 @@ const DashboardEstudiante: React.FC = () => {
                 </table>
             </div>
 
-            {/* Enlaces de interés */}
             <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold text-[#003c71] mb-4">Enlaces de interés</h2>
                 <div className="space-y-3">
@@ -160,7 +180,6 @@ const DashboardEstudiante: React.FC = () => {
                 </div>
             </div>
 
-            {/* Modal */}
             <Dialog open={modalOpen} onClose={() => setModalOpen(false)} className="fixed inset-0 z-50 flex items-center justify-center">
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">

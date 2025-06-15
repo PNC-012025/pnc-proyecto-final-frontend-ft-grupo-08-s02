@@ -1,45 +1,90 @@
-import React from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle, XCircle } from 'lucide-react';
+import useAuth from '../../hooks/useAuth';
 
-const RegistrosPage: React.FC = () => {
+interface RegistroHora {
+    id: number;
+    fecha: string;
+    horaInicio: string;
+    horaFin: string;
+    actividad: string;
+    aula: string;
+    horasEfectivas: number;
+    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+    estudianteId: string;
+}
+
+const ValidacionesPage: React.FC = () => {
+    const [registros, setRegistros] = useState<RegistroHora[]>([]);
+    const { user } = useAuth();
+
+    useEffect(() => {
+        const data = localStorage.getItem('registros');
+        if (data) {
+            setRegistros(JSON.parse(data));
+        }
+    }, []);
+
+    const actualizarEstado = (id: number, nuevoEstado: 'APROBADO' | 'RECHAZADO') => {
+        const nuevosRegistros = registros.map(reg =>
+            reg.id === id ? { ...reg, estado: nuevoEstado } : reg
+        );
+        setRegistros(nuevosRegistros);
+        localStorage.setItem('registros', JSON.stringify(nuevosRegistros));
+    };
+
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-[#003c71]">Mis registros</h2>
-                <button className="flex items-center gap-2 px-4 py-2 bg-[#003c71] text-white rounded hover:bg-[#00509e]">
-                    <Plus size={20} /> Nuevo registro
-                </button>
+        <div className="space-y-6 p-4">
+            <h2 className="text-2xl font-bold text-[#003c71]">Validaciones de Registros</h2>
+            <div className="overflow-x-auto">
+                <table className="min-w-full bg-white rounded shadow">
+                    <thead>
+                        <tr className="bg-gray-100 text-gray-700 text-left">
+                            <th className="px-4 py-2">Estudiante</th>
+                            <th className="px-4 py-2">Fecha</th>
+                            <th className="px-4 py-2">Hora Inicio</th>
+                            <th className="px-4 py-2">Hora Fin</th>
+                            <th className="px-4 py-2">Actividad</th>
+                            <th className="px-4 py-2">Aula</th>
+                            <th className="px-4 py-2">Horas</th>
+                            <th className="px-4 py-2">Estado</th>
+                            <th className="px-4 py-2">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {registros
+                            .filter(reg => reg.estado === 'PENDIENTE')
+                            .map(reg => (
+                                <tr key={reg.id} className="border-b hover:bg-gray-50">
+                                    <td className="px-4 py-2">{reg.estudianteId}</td>
+                                    <td className="px-4 py-2">{reg.fecha}</td>
+                                    <td className="px-4 py-2">{reg.horaInicio}</td>
+                                    <td className="px-4 py-2">{reg.horaFin}</td>
+                                    <td className="px-4 py-2">{reg.actividad}</td>
+                                    <td className="px-4 py-2">{reg.aula}</td>
+                                    <td className="px-4 py-2">{reg.horasEfectivas}</td>
+                                    <td className="px-4 py-2">{reg.estado}</td>
+                                    <td className="px-4 py-2 space-x-2">
+                                        <button
+                                            className="text-green-600 hover:underline"
+                                            onClick={() => actualizarEstado(reg.id, 'APROBADO')}
+                                        >
+                                            <CheckCircle size={18} />
+                                        </button>
+                                        <button
+                                            className="text-red-600 hover:underline"
+                                            onClick={() => actualizarEstado(reg.id, 'RECHAZADO')}
+                                        >
+                                            <XCircle size={18} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                    </tbody>
+                </table>
             </div>
-
-            <table className="min-w-full bg-white rounded shadow overflow-hidden">
-                <thead className="bg-[#003c71] text-white">
-                    <tr>
-                        <th className="text-left px-4 py-2">Fecha</th>
-                        <th className="text-left px-4 py-2">Hora inicio</th>
-                        <th className="text-left px-4 py-2">Hora fin</th>
-                        <th className="text-left px-4 py-2">Actividad</th>
-                        <th className="text-left px-4 py-2">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr className="border-t">
-                        <td className="px-4 py-2">2025-06-10</td>
-                        <td className="px-4 py-2">08:00</td>
-                        <td className="px-4 py-2">12:00</td>
-                        <td className="px-4 py-2">Documentación</td>
-                        <td className="px-4 py-2 flex gap-2">
-                            <button className="text-blue-600 hover:underline">
-                                <Pencil size={18} />
-                            </button>
-                            <button className="text-red-600 hover:underline">
-                                <Trash2 size={18} />
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
         </div>
     );
 };
 
-export default RegistrosPage;
+export default ValidacionesPage;
