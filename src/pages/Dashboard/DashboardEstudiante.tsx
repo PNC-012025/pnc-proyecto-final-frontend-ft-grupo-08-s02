@@ -18,11 +18,15 @@ const calcularHoras = (inicio: string, fin: string): number => {
     const inicioMin = hiH * 60 + hiM;
     const finMin = hfH * 60 + hfM;
     const diff = Math.max(0, finMin - inicioMin);
-    return Math.round((diff / 60) * 100) / 100; // redondear a 2 decimales
+    return Math.round((diff / 60) * 100) / 100;
 };
 
 const DashboardEstudiante: React.FC = () => {
-    const [registros, setRegistros] = useState<RegistroHora[]>([]);
+    const [registros, setRegistros] = useState<RegistroHora[]>(() => {
+        const data = localStorage.getItem('registros');
+        return data ? JSON.parse(data) : [];
+    });
+
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<RegistroHora | null>(null);
 
@@ -34,13 +38,16 @@ const DashboardEstudiante: React.FC = () => {
         aula: ''
     });
 
+    useEffect(() => {
+        localStorage.setItem('registros', JSON.stringify(registros));
+    }, [registros]);
+
     const handleSubmit = () => {
         const horasEfectivas = calcularHoras(form.horaInicio, form.horaFin);
 
         if (editing) {
-            setRegistros(prev =>
-                prev.map(r => (r.id === editing.id ? { ...editing, ...form, horasEfectivas } : r))
-            );
+            const updated = registros.map(r => r.id === editing.id ? { ...editing, ...form, horasEfectivas } : r);
+            setRegistros(updated);
         } else {
             const nuevoRegistro: RegistroHora = {
                 id: Date.now(),
@@ -115,16 +122,10 @@ const DashboardEstudiante: React.FC = () => {
                                 <td>{reg.aula}</td>
                                 <td>{reg.horasEfectivas}</td>
                                 <td className="flex gap-2">
-                                    <button
-                                        onClick={() => handleEdit(reg)}
-                                        className="text-blue-600 hover:underline"
-                                    >
+                                    <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
                                         <Edit2 size={16} />
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(reg.id)}
-                                        className="text-red-600 hover:underline"
-                                    >
+                                    <button onClick={() => handleDelete(reg.id)} className="text-red-600 hover:underline">
                                         <Trash2 size={16} />
                                     </button>
                                 </td>
