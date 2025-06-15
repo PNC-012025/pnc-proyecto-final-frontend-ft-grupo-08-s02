@@ -1,64 +1,83 @@
 // src/pages/Dashboard/DashboardEncargado.tsx
 import React, { useState, useEffect } from 'react';
-import { Plus, UserPlus, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, UserPlus, Edit2, Trash2 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
 import type { Usuario, Role } from '../../types';
 
-interface RegistroHora {
-    id: number;
-    estudianteId: string;
-    horasEfectivas: number;
-    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-}
-
 const DashboardEncargado: React.FC = () => {
     const { user, logout } = useAuth();
 
-    // ——— Usuarios ———
+    // Estado de usuarios
     const [usuarios, setUsuarios] = useState<Usuario[]>(() => {
-        const data = localStorage.getItem('usuarios');
-        return data ? JSON.parse(data) : [];
+        return JSON.parse(localStorage.getItem('usuarios') || '[]');
     });
-    const [userModalOpen, setUserModalOpen] = useState(false);
-    const [newUser, setNewUser] = useState<Omit<Usuario, 'id'>>({
+    const [passwords, setPasswords] = useState<Record<string, string>>(() => {
+        return JSON.parse(localStorage.getItem('passwords') || '{}');
+    });
+
+    // Modal de usuario
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editing, setEditing] = useState<Usuario | null>(null);
+    const [form, setForm] = useState<Omit<Usuario, 'id'>>({
         nombre: '',
         apellido: '',
         email: '',
-        rol: 'ESTUDIANTE' as Role,
+        rol: 'ESTUDIANTE',
         codigoUsuario: '',
     });
-    const [newPassword, setNewPassword] = useState('');
+    const [formPass, setFormPass] = useState('');
 
-    // Persistir usuarios en localStorage
+    // Persistir cambios
     useEffect(() => {
         localStorage.setItem('usuarios', JSON.stringify(usuarios));
     }, [usuarios]);
+    useEffect(() => {
+        localStorage.setItem('passwords', JSON.stringify(passwords));
+    }, [passwords]);
 
-    const handleCreateUser = () => {
-        const id = Date.now().toString();
-        const created: Usuario = { id, ...newUser };
-        // (Opcional) guardar contraseña en otro storage o enviar al backend
-        setUsuarios(prev => [...prev, created]);
-        setUserModalOpen(false);
-        setNewUser({ nombre: '', apellido: '', email: '', rol: 'ESTUDIANTE', codigoUsuario: '' });
-        setNewPassword('');
+    const openNew = () => {
+        setEditing(null);
+        setForm({ nombre: '', apellido: '', email: '', rol: 'ESTUDIANTE', codigoUsuario: '' });
+        setFormPass('');
+        setModalOpen(true);
     };
 
-    // ——— Registros ———
-    const [registros, setRegistros] = useState<RegistroHora[]>(() => {
-        const data = localStorage.getItem('registros');
-        return data ? JSON.parse(data) : [];
-    });
+    const openEdit = (u: Usuario) => {
+        setEditing(u);
+        setForm({
+            nombre: u.nombre,
+            apellido: u.apellido,
+            email: u.email,
+            rol: u.rol,
+            codigoUsuario: u.codigoUsuario,
+        });
+        setFormPass(passwords[u.email] || '');
+        setModalOpen(true);
+    };
 
-    // Sumar horas aprobadas por estudiante
-    const horasPorEstudiante: Record<string, number> = {};
-    usuarios.forEach(u => {
-        const total = registros
-            .filter(r => r.estudianteId === u.id && r.estado === 'APROBADO')
-            .reduce((sum, r) => sum + r.horasEfectivas, 0);
-        horasPorEstudiante[u.id] = total;
-    });
+    const handleSubmit = () => {
+        if (editing) {
+            // Editar existente
+            setUsuarios(prev =>
+                prev.map(u => (u.id === editing.id ? { ...editing, ...form } : u))
+            );
+            if (formPass) {
+                setPasswords(prev => ({ ...prev, [form.email]: formPass }));
+            }
+        } else {
+            // Crear nuevo
+            const id = Date.now().toString();
+            const nu: Usuario = { id, ...form };
+            setUsuarios(prev => [...prev, nu]);
+            setPasswords(prev => ({ ...prev, [form.email]: formPass }));
+        }
+        setModalOpen(false);
+    };
+
+    const handleDelete = (id: string) => {
+        setUsuarios(prev => prev.filter(u => u.id !== id));
+    };
 
     return (
         <div className="space-y-6 p-4">
@@ -67,9 +86,6 @@ const DashboardEncargado: React.FC = () => {
                     <h1 className="text-2xl font-bold text-[#003c71]">
                         Bienvenido, {user?.nombre}
                     </h1>
-                    <p className="text-gray-600">
-                        Desde aquí puedes gestionar usuarios y validar registros
-                    </p>
                 </div>
                 <button
                     onClick={logout}
@@ -79,12 +95,12 @@ const DashboardEncargado: React.FC = () => {
                 </button>
             </header>
 
-            {/* ——— Sección de Usuarios ——— */}
-            <section className="bg-white rounded-xl shadow p-6 space-y-4">
-                <div className="flex justify-between items-center">
+            {/* Usuarios */}
+            <section className="bg-white rounded-xl shadow p-6">
+                <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Usuarios</h2>
                     <button
-                        onClick={() => setUserModalOpen(true)}
+                        onClick={openNew}
                         className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]"
                     >
                         <UserPlus size={16} /> Nuevo usuario
@@ -98,23 +114,30 @@ const DashboardEncargado: React.FC = () => {
                                 <th className="px-3 py-2">Email</th>
                                 <th className="px-3 py-2">Rol</th>
                                 <th className="px-3 py-2">Código</th>
+                                <th className="px-3 py-2">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {usuarios.map(u => (
                                 <tr key={u.id} className="border-b hover:bg-gray-50">
-                                    <td className="px-3 py-2">
-                                        {u.nombre} {u.apellido}
-                                    </td>
+                                    <td className="px-3 py-2">{u.nombre} {u.apellido}</td>
                                     <td className="px-3 py-2">{u.email}</td>
                                     <td className="px-3 py-2">{u.rol}</td>
                                     <td className="px-3 py-2">{u.codigoUsuario}</td>
+                                    <td className="px-3 py-2 flex gap-2">
+                                        <button onClick={() => openEdit(u)} className="text-blue-600">
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDelete(u.id)} className="text-red-600">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                             {usuarios.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="px-3 py-4 text-center text-gray-500">
-                                        No hay usuarios registrados.
+                                    <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
+                                        No hay usuarios.
                                     </td>
                                 </tr>
                             )}
@@ -123,58 +146,58 @@ const DashboardEncargado: React.FC = () => {
                 </div>
             </section>
 
-            {/* ——— Modal para crear usuario ——— */}
+            {/* Modal Crear/Editar Usuario */}
             <Dialog
-                open={userModalOpen}
-                onClose={() => setUserModalOpen(false)}
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
                 className="fixed inset-0 z-50 flex items-center justify-center"
             >
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">
-                        Crear nuevo usuario
+                        {editing ? 'Editar usuario' : 'Nuevo usuario'}
                     </Dialog.Title>
                     <form
                         onSubmit={e => {
                             e.preventDefault();
-                            handleCreateUser();
+                            handleSubmit();
                         }}
                         className="space-y-4"
                     >
                         <input
                             type="text"
                             placeholder="Nombre"
-                            value={newUser.nombre}
-                            onChange={e => setNewUser({ ...newUser, nombre: e.target.value })}
+                            value={form.nombre}
+                            onChange={e => setForm({ ...form, nombre: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <input
                             type="text"
                             placeholder="Apellido"
-                            value={newUser.apellido}
-                            onChange={e => setNewUser({ ...newUser, apellido: e.target.value })}
+                            value={form.apellido}
+                            onChange={e => setForm({ ...form, apellido: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <input
                             type="email"
                             placeholder="Email"
-                            value={newUser.email}
-                            onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                            value={form.email}
+                            onChange={e => setForm({ ...form, email: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <input
                             type="password"
-                            placeholder="Password"
-                            value={newPassword}
-                            onChange={e => setNewPassword(e.target.value)}
+                            placeholder="Contraseña"
+                            value={formPass}
+                            onChange={e => setFormPass(e.target.value)}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <select
-                            value={newUser.rol}
-                            onChange={e => setNewUser({ ...newUser, rol: e.target.value as Role })}
+                            value={form.rol}
+                            onChange={e => setForm({ ...form, rol: e.target.value as Role })}
                             className="w-full border rounded px-3 py-2"
                         >
                             <option value="ESTUDIANTE">Estudiante</option>
@@ -184,15 +207,15 @@ const DashboardEncargado: React.FC = () => {
                         <input
                             type="text"
                             placeholder="Código de usuario"
-                            value={newUser.codigoUsuario}
-                            onChange={e => setNewUser({ ...newUser, codigoUsuario: e.target.value })}
+                            value={form.codigoUsuario}
+                            onChange={e => setForm({ ...form, codigoUsuario: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => setUserModalOpen(false)}
+                                onClick={() => setModalOpen(false)}
                                 className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
                             >
                                 Cancelar
@@ -201,40 +224,12 @@ const DashboardEncargado: React.FC = () => {
                                 type="submit"
                                 className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]"
                             >
-                                Crear
+                                {editing ? 'Guardar cambios' : 'Crear usuario'}
                             </button>
                         </div>
                     </form>
                 </Dialog.Panel>
             </Dialog>
-
-            {/* ——— Avance por estudiante ——— */}
-            <section className="bg-white rounded-xl shadow p-6">
-                <h2 className="text-xl font-semibold text-[#003c71] mb-4">
-                    Progreso de Estudiantes
-                </h2>
-                <div className="space-y-4">
-                    {usuarios.map(u => {
-                        const aprobadas = horasPorEstudiante[u.id] || 0;
-                        const pct = Math.min((aprobadas / 600) * 100, 100);
-                        return (
-                            <div key={u.id} className="space-y-1">
-                                <p className="font-medium">{u.nombre} {u.apellido} ({u.email})</p>
-                                <div className="w-full bg-gray-200 rounded-full h-3">
-                                    <div
-                                        className="bg-green-500 h-3 rounded-full"
-                                        style={{ width: `${pct}%` }}
-                                    />
-                                </div>
-                                <p className="text-sm text-gray-600">{aprobadas} / 600 horas</p>
-                            </div>
-                        );
-                    })}
-                    {usuarios.length === 0 && (
-                        <p className="text-gray-500">No hay estudiantes registrados.</p>
-                    )}
-                </div>
-            </section>
         </div>
     );
 };
