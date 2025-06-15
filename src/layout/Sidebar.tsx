@@ -12,11 +12,11 @@ const Sidebar: React.FC = () => {
     const links = user?.rol === 'ENCARGADO'
         ? [
             { to: '/dashboard', label: 'Inicio', icon: <Book size={20} /> },
-            { to: '/validaciones', label: 'Validaciones', icon: <UserCheck size={20} /> },
+            { to: '/dashboard/validaciones', label: 'Validaciones', icon: <UserCheck size={20} /> },
         ]
         : [
             { to: '/dashboard', label: 'Inicio', icon: <Book size={20} /> },
-            { to: '/registros', label: 'Mis Registros', icon: <Clock size={20} /> },
+            { to: '/dashboard/registros', label: 'Mis Registros', icon: <Clock size={20} /> },
         ];
 
     return (
@@ -31,8 +31,9 @@ const Sidebar: React.FC = () => {
                     <Link
                         key={link.to}
                         to={link.to}
-                        className={`flex items-center gap-2 p-2 rounded-md text-sm font-medium transition hover:bg-[#003c71]/10 ${isActive(link.to) ? 'bg-[#003c71] text-white' : 'text-gray-700'
-                            }`}
+                        className={`flex items-center gap-2 p-2 rounded-md text-sm font-medium transition hover:bg-[#003c71]/10 ${
+                            isActive(link.to) ? 'bg-[#003c71] text-white' : 'text-gray-700'
+                        }`}
                     >
                         {link.icon}
                         {link.label}
