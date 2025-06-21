@@ -6,15 +6,20 @@ import type { Usuario, Role, Materia } from '../../types';
 import { asociarUsuarioConMateria } from '../../services/usuarioMateriaService';
 
 type UsuarioConMateria = Usuario & { materiaId?: string };
+const ITEMS_PER_PAGE = 10;
 
 const DashboardEncargado: React.FC = () => {
     const { user, logout } = useAuth();
 
-    // Estados de bUsqueda
-    const [searchUsuario, setSearchUsuario] = useState<string>('');
-    const [searchMateria, setSearchMateria] = useState<string>('');
+    // Buscadores
+    const [searchUsuario, setSearchUsuario] = useState('');
+    const [searchMateria, setSearchMateria] = useState('');
 
-    // — Usuarios —
+    // Paginacion
+    const [userPage, setUserPage] = useState(1);
+    const [matPage, setMatPage] = useState(1);
+
+    // Usuarios
     const [usuarios, setUsuarios] = useState<UsuarioConMateria[]>(() =>
         JSON.parse(localStorage.getItem('usuarios') || '[]')
     );
@@ -32,10 +37,10 @@ const DashboardEncargado: React.FC = () => {
         materiaId: '',
     });
     const [userPass, setUserPass] = useState('');
-    const [selectedMateria, setSelectedMateria] = useState<string>('');
+    const [selectedMateria, setSelectedMateria] = useState('');
     const [userError, setUserError] = useState<string | null>(null);
 
-    // — Materias —
+    // Materias
     const [materias, setMaterias] = useState<Materia[]>(() =>
         JSON.parse(localStorage.getItem('materias') || '[]')
     );
@@ -55,26 +60,43 @@ const DashboardEncargado: React.FC = () => {
         localStorage.setItem('materias', JSON.stringify(materias));
     }, [materias]);
 
+    // Filtrado
     const filteredUsuarios = useMemo(() => {
         const term = searchUsuario.toLowerCase();
         return usuarios.filter(u => {
-            const fullname = `${u.nombre} ${u.apellido}`.toLowerCase();
-            const materiaNombre = materias.find(m => m.id === u.materiaId)?.nombre.toLowerCase() || '';
+            const full = `${u.nombre} ${u.apellido}`.toLowerCase();
+            const matName =
+                materias.find(m => m.id === u.materiaId)?.nombre.toLowerCase() || '';
             return (
-                fullname.includes(term) ||
+                full.includes(term) ||
                 u.email.toLowerCase().includes(term) ||
                 u.codigoUsuario.toLowerCase().includes(term) ||
-                materiaNombre.includes(term)
+                matName.includes(term)
             );
         });
     }, [searchUsuario, usuarios, materias]);
 
     const filteredMaterias = useMemo(() => {
         const term = searchMateria.toLowerCase();
-        return materias.filter(m => m.nombre.toLowerCase().includes(term));
+        return materias.filter(m =>
+            m.nombre.toLowerCase().includes(term)
+        );
     }, [searchMateria, materias]);
 
-    // Funciones modales Usuarios
+    // Paginas
+    const userPageCount = Math.max(1, Math.ceil(filteredUsuarios.length / ITEMS_PER_PAGE));
+    const matPageCount = Math.max(1, Math.ceil(filteredMaterias.length / ITEMS_PER_PAGE));
+
+    const paginatedUsuarios = filteredUsuarios.slice(
+        (userPage - 1) * ITEMS_PER_PAGE,
+        userPage * ITEMS_PER_PAGE
+    );
+    const paginatedMaterias = filteredMaterias.slice(
+        (matPage - 1) * ITEMS_PER_PAGE,
+        matPage * ITEMS_PER_PAGE
+    );
+
+    // Usuarios: modales
     const openNewUser = () => {
         setEditingUser(null);
         setUserForm({ nombre: '', apellido: '', codigoUsuario: '', email: '', rol: 'ESTUDIANTE', materiaId: '' });
@@ -83,34 +105,61 @@ const DashboardEncargado: React.FC = () => {
         setUserError(null);
         setModalUserOpen(true);
     };
-
     const openEditUser = (u: UsuarioConMateria) => {
         setEditingUser(u);
-        setUserForm({ nombre: u.nombre, apellido: u.apellido, codigoUsuario: u.codigoUsuario, email: u.email, rol: u.rol, materiaId: u.materiaId || '' });
+        setUserForm({
+            nombre: u.nombre,
+            apellido: u.apellido,
+            codigoUsuario: u.codigoUsuario,
+            email: u.email,
+            rol: u.rol,
+            materiaId: u.materiaId || '',
+        });
         setUserPass(passwords[u.email] || '');
         setSelectedMateria(u.materiaId || '');
         setUserError(null);
         setModalUserOpen(true);
     };
-
     const handleSubmitUser = async () => {
         setUserError(null);
-        const dup = usuarios.some(u => !editingUser && (u.email === userForm.email || u.codigoUsuario === userForm.codigoUsuario));
+        const dup = usuarios.some(
+            u =>
+                !editingUser &&
+                (u.email === userForm.email || u.codigoUsuario === userForm.codigoUsuario)
+        );
         if (dup) {
             setUserError('Email o código ya registrado');
             return;
         }
         try {
             if (editingUser) {
-                setUsuarios(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...userForm, materiaId: selectedMateria } : u));
+                setUsuarios(prev =>
+                    prev.map(u =>
+                        u.id === editingUser.id
+                            ? { ...u, ...userForm, materiaId: selectedMateria }
+                            : u
+                    )
+                );
                 if (userPass) setPasswords(p => ({ ...p, [userForm.email]: userPass }));
-                if (selectedMateria) await asociarUsuarioConMateria(editingUser.id, selectedMateria);
+                if (selectedMateria) {
+                    await asociarUsuarioConMateria(editingUser.id, selectedMateria);
+                }
             } else {
                 const id = userForm.codigoUsuario.trim();
-                const nuevo: UsuarioConMateria = { id, ...userForm, materiaId: selectedMateria || undefined };
+                const nuevo: UsuarioConMateria = {
+                    id,
+                    nombre: userForm.nombre,
+                    apellido: userForm.apellido,
+                    email: userForm.email,
+                    rol: userForm.rol,
+                    codigoUsuario: userForm.codigoUsuario,
+                    materiaId: selectedMateria || undefined,
+                };
                 setUsuarios(prev => [...prev, nuevo]);
                 setPasswords(p => ({ ...p, [userForm.email]: userPass }));
-                if (selectedMateria) await asociarUsuarioConMateria(id, selectedMateria);
+                if (selectedMateria) {
+                    await asociarUsuarioConMateria(id, selectedMateria);
+                }
             }
         } catch (e) {
             console.error(e);
@@ -118,44 +167,71 @@ const DashboardEncargado: React.FC = () => {
             setModalUserOpen(false);
         }
     };
+    const handleDeleteUser = (id: string) =>
+        setUsuarios(prev => prev.filter(u => u.id !== id));
 
-    const handleDeleteUser = (id: string) => setUsuarios(prev => prev.filter(u => u.id !== id));
-
-    // Funciones modales Materias
-    const openNewMat = () => { setEditingMat(null); setMatForm({ nombre: '' }); setMatError(null); setModalMatOpen(true); };
-    const openEditMat = (m: Materia) => { setEditingMat(m); setMatForm({ nombre: m.nombre }); setMatError(null); setModalMatOpen(true); };
+    // Materias: modales
+    const openNewMat = () => {
+        setEditingMat(null);
+        setMatForm({ nombre: '' });
+        setMatError(null);
+        setModalMatOpen(true);
+    };
+    const openEditMat = (m: Materia) => {
+        setEditingMat(m);
+        setMatForm({ nombre: m.nombre });
+        setMatError(null);
+        setModalMatOpen(true);
+    };
     const handleSubmitMat = () => {
         setMatError(null);
-        const dup = materias.some(x => !editingMat && x.nombre.trim().toLowerCase() === matForm.nombre.trim().toLowerCase());
-        if (dup) { setMatError('Materia duplicada'); return; }
+        const dup = materias.some(
+            x =>
+                !editingMat &&
+                x.nombre.trim().toLowerCase() === matForm.nombre.trim().toLowerCase()
+        );
+        if (dup) {
+            setMatError('Materia duplicada');
+            return;
+        }
         if (editingMat) {
-            setMaterias(prev => prev.map(x => x.id === editingMat.id ? { ...x, nombre: matForm.nombre } : x));
+            setMaterias(prev =>
+                prev.map(x =>
+                    x.id === editingMat.id ? { ...x, nombre: matForm.nombre } : x
+                )
+            );
         } else {
-            setMaterias(prev => [...prev, { id: Date.now().toString(), nombre: matForm.nombre }]);
+            setMaterias(prev => [
+                ...prev,
+                { id: Date.now().toString(), nombre: matForm.nombre },
+            ]);
         }
         setModalMatOpen(false);
     };
-    const handleDeleteMat = (id: string) => setMaterias(prev => prev.filter(m => m.id !== id));
+    const handleDeleteMat = (id: string) =>
+        setMaterias(prev => prev.filter(m => m.id !== id));
 
     return (
         <div className="space-y-6 p-4">
+            {/* Header */}
             <header className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-[#003c71]">Bienvenido, {user?.nombre}</h1>
-                <button onClick={logout} className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Cerrar sesión</button>
             </header>
 
-            {/* SecciOn Usuarios */}
+            {/* Usuarios */}
             <section className="bg-white rounded-xl shadow p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Usuarios</h2>
-                    <button onClick={openNewUser} className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]"><UserPlus size={16} /> Nuevo usuario</button>
+                    <button onClick={openNewUser} className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]">
+                        <UserPlus size={16} /> Nuevo usuario
+                    </button>
                 </div>
                 <input
                     type="text"
                     placeholder="Buscar usuario..."
                     className="w-full border rounded px-3 py-2 mb-4"
                     value={searchUsuario}
-                    onChange={e => setSearchUsuario(e.target.value)}
+                    onChange={e => { setSearchUsuario(e.target.value); setUserPage(1); }}
                 />
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -170,7 +246,7 @@ const DashboardEncargado: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredUsuarios.map(u => {
+                            {paginatedUsuarios.map(u => {
                                 const m = materias.find(x => x.id === u.materiaId);
                                 return (
                                     <tr key={u.id} className="border-b hover:bg-gray-50">
@@ -186,26 +262,46 @@ const DashboardEncargado: React.FC = () => {
                                     </tr>
                                 );
                             })}
-                            {filteredUsuarios.length === 0 && (
-                                <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-500">No se encontraron usuarios.</td></tr>
+                            {paginatedUsuarios.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="px-3 py-4 text-center text-gray-500">No se encontraron usuarios.</td>
+                                </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
+                {/* Paginacion Usuarios */}
+                <div className="flex justify-between items-center mt-4">
+                    <span>Página {userPage} de {userPageCount}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                            disabled={userPage === 1}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >Anterior</button>
+                        <button
+                            onClick={() => setUserPage(p => Math.min(userPageCount, p + 1))}
+                            disabled={userPage === userPageCount}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >Siguiente</button>
+                    </div>
+                </div>
             </section>
 
-            {/* Seccion Materias */}
+            {/* Materias */}
             <section className="bg-white rounded-xl shadow p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Materias</h2>
-                    <button onClick={openNewMat} className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]"><Plus size={16} /> Nueva materia</button>
+                    <button onClick={openNewMat} className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]">
+                        <Plus size={16} /> Nueva materia
+                    </button>
                 </div>
                 <input
                     type="text"
                     placeholder="Buscar materia..."
                     className="w-full border rounded px-3 py-2 mb-4"
                     value={searchMateria}
-                    onChange={e => setSearchMateria(e.target.value)}
+                    onChange={e => { setSearchMateria(e.target.value); setMatPage(1); }}
                 />
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -216,7 +312,7 @@ const DashboardEncargado: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredMaterias.map(m => (
+                            {paginatedMaterias.map(m => (
                                 <tr key={m.id} className="border-b hover:bg-gray-50">
                                     <td className="px-3 py-2">{m.nombre}</td>
                                     <td className="px-3 py-2 flex gap-2">
@@ -225,11 +321,29 @@ const DashboardEncargado: React.FC = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {filteredMaterias.length === 0 && (
-                                <tr><td colSpan={2} className="px-3 py-4 text-center text-gray-500">No se encontraron materias.</td></tr>
+                            {paginatedMaterias.length === 0 && (
+                                <tr>
+                                    <td colSpan={2} className="px-3 py-4 text-center text-gray-500">No se encontraron materias.</td>
+                                </tr>
                             )}
                         </tbody>
                     </table>
+                </div>
+                {/* Paginacion Materias */}
+                <div className="flex justify-between items-center mt-4">
+                    <span>Página {matPage} de {matPageCount}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setMatPage(p => Math.max(1, p - 1))}
+                            disabled={matPage === 1}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >Anterior</button>
+                        <button
+                            onClick={() => setMatPage(p => Math.min(matPageCount, p + 1))}
+                            disabled={matPage === matPageCount}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >Siguiente</button>
+                    </div>
                 </div>
             </section>
 
@@ -238,7 +352,32 @@ const DashboardEncargado: React.FC = () => {
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">{editingUser ? 'Editar usuario' : 'Nuevo usuario'}</Dialog.Title>
                     <form onSubmit={e => { e.preventDefault(); handleSubmitUser(); }} className="space-y-4">
-                        {/* ...campos de formulario de usuario (igual que antes) */}
+                        <input type="text" placeholder="Nombre" required className="w-full border rounded px-3 py-2"
+                            value={userForm.nombre} onChange={e => setUserForm({ ...userForm, nombre: e.target.value })} />
+                        <input type="text" placeholder="Apellido" required className="w-full border rounded px-3 py-2"
+                            value={userForm.apellido} onChange={e => setUserForm({ ...userForm, apellido: e.target.value })} />
+                        <input type="text" placeholder="Código" required className="w-full border rounded px-3 py-2"
+                            value={userForm.codigoUsuario}
+                            onChange={e => {
+                                const code = e.target.value;
+                                setUserForm({ ...userForm, codigoUsuario: code, email: `${code}@uca.edu.sv` });
+                            }} />
+                        <input type="email" placeholder="Email" readOnly className="w-full border rounded px-3 py-2 bg-gray-100"
+                            value={userForm.email} />
+                        <input type="password" placeholder="Contraseña" required className="w-full border rounded px-3 py-2"
+                            value={userPass} onChange={e => setUserPass(e.target.value)} />
+                        <select value={userForm.rol} onChange={e => setUserForm({ ...userForm, rol: e.target.value as Role })}
+                            className="w-full border rounded px-3 py-2">
+                            <option value="ESTUDIANTE">Estudiante</option>
+                            <option value="INSTRUCTOR_SOCIAL">Instructor Social</option>
+                            <option value="INSTRUCTOR_REMUNERADO">Instructor Remunerado</option>
+                        </select>
+                        <select value={selectedMateria} onChange={e => setSelectedMateria(e.target.value)}
+                            className="w-full border rounded px-3 py-2" required={!editingUser}>
+                            <option value="" disabled>Selecciona una materia</option>
+                            {materias.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                        </select>
+                        {userError && <div className="text-red-600 text-sm">{userError}</div>}
                         <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => setModalUserOpen(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancelar</button>
                             <button type="submit" className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]">{editingUser ? 'Guardar' : 'Crear'}</button>
@@ -252,7 +391,8 @@ const DashboardEncargado: React.FC = () => {
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">{editingMat ? 'Editar materia' : 'Nueva materia'}</Dialog.Title>
                     <form onSubmit={e => { e.preventDefault(); handleSubmitMat(); }} className="space-y-4">
-                        <input type="text" placeholder="Nombre materia" className="w-full border rounded px-3 py-2" required value={matForm.nombre} onChange={e => setMatForm({ nombre: e.target.value })} />
+                        <input type="text" placeholder="Nombre materia" required className="w-full border rounded px-3 py-2"
+                            value={matForm.nombre} onChange={e => setMatForm({ nombre: e.target.value })} />
                         {matError && <div className="text-red-600 text-sm">{matError}</div>}
                         <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => setModalMatOpen(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancelar</button>
