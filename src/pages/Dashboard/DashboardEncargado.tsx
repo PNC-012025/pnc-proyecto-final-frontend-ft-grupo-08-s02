@@ -15,7 +15,7 @@ const DashboardEncargado: React.FC = () => {
     const [searchUsuario, setSearchUsuario] = useState('');
     const [searchMateria, setSearchMateria] = useState('');
 
-    // Paginacion
+    // Paginación
     const [userPage, setUserPage] = useState(1);
     const [matPage, setMatPage] = useState(1);
 
@@ -49,7 +49,7 @@ const DashboardEncargado: React.FC = () => {
     const [matForm, setMatForm] = useState({ nombre: '' });
     const [matError, setMatError] = useState<string | null>(null);
 
-    // Persistencia
+    // Persistencia en localStorage
     useEffect(() => {
         localStorage.setItem('usuarios', JSON.stringify(usuarios));
     }, [usuarios]);
@@ -60,7 +60,7 @@ const DashboardEncargado: React.FC = () => {
         localStorage.setItem('materias', JSON.stringify(materias));
     }, [materias]);
 
-    // Filtrado
+    // Filtrado con búsqueda
     const filteredUsuarios = useMemo(() => {
         const term = searchUsuario.toLowerCase();
         return usuarios.filter(u => {
@@ -83,7 +83,7 @@ const DashboardEncargado: React.FC = () => {
         );
     }, [searchMateria, materias]);
 
-    // Paginas
+    // Cálculo de páginas
     const userPageCount = Math.max(1, Math.ceil(filteredUsuarios.length / ITEMS_PER_PAGE));
     const matPageCount = Math.max(1, Math.ceil(filteredMaterias.length / ITEMS_PER_PAGE));
 
@@ -96,7 +96,7 @@ const DashboardEncargado: React.FC = () => {
         matPage * ITEMS_PER_PAGE
     );
 
-    // Usuarios: modales
+    // Abrir modales
     const openNewUser = () => {
         setEditingUser(null);
         setUserForm({ nombre: '', apellido: '', codigoUsuario: '', email: '', rol: 'ESTUDIANTE', materiaId: '' });
@@ -120,6 +120,8 @@ const DashboardEncargado: React.FC = () => {
         setUserError(null);
         setModalUserOpen(true);
     };
+
+    // Guardar usuario con cierre inmediato del modal
     const handleSubmitUser = async () => {
         setUserError(null);
         const dup = usuarios.some(
@@ -131,46 +133,52 @@ const DashboardEncargado: React.FC = () => {
             setUserError('Email o código ya registrado');
             return;
         }
-        try {
-            if (editingUser) {
-                setUsuarios(prev =>
-                    prev.map(u =>
-                        u.id === editingUser.id
-                            ? { ...u, ...userForm, materiaId: selectedMateria }
-                            : u
-                    )
-                );
-                if (userPass) setPasswords(p => ({ ...p, [userForm.email]: userPass }));
-                if (selectedMateria) {
-                    await asociarUsuarioConMateria(editingUser.id, selectedMateria);
-                }
-            } else {
-                const id = userForm.codigoUsuario.trim();
-                const nuevo: UsuarioConMateria = {
-                    id,
-                    nombre: userForm.nombre,
-                    apellido: userForm.apellido,
-                    email: userForm.email,
-                    rol: userForm.rol,
-                    codigoUsuario: userForm.codigoUsuario,
-                    materiaId: selectedMateria || undefined,
-                };
-                setUsuarios(prev => [...prev, nuevo]);
-                setPasswords(p => ({ ...p, [userForm.email]: userPass }));
-                if (selectedMateria) {
-                    await asociarUsuarioConMateria(id, selectedMateria);
-                }
+
+        // Actualizo lista local
+        if (editingUser) {
+            setUsuarios(prev =>
+                prev.map(u =>
+                    u.id === editingUser.id
+                        ? { ...u, ...userForm, materiaId: selectedMateria || undefined }
+                        : u
+                )
+            );
+        } else {
+            const id = userForm.codigoUsuario.trim();
+            const nuevo: UsuarioConMateria = {
+                id,
+                nombre: userForm.nombre,
+                apellido: userForm.apellido,
+                email: userForm.email,
+                rol: userForm.rol,
+                codigoUsuario: userForm.codigoUsuario,
+                materiaId: selectedMateria || undefined,
+            };
+            setUsuarios(prev => [...prev, nuevo]);
+        }
+
+        // Cierro modal y limpio edición
+        setModalUserOpen(false);
+        setEditingUser(null);
+
+        // Persiste contraseña
+        setPasswords(p => ({ ...p, [userForm.email]: userPass }));
+
+        // Asociar materia si aplica
+        if (selectedMateria) {
+            try {
+                const targetId = editingUser ? editingUser.id : userForm.codigoUsuario.trim();
+                await asociarUsuarioConMateria(targetId, selectedMateria);
+            } catch (e) {
+                console.error(e);
             }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setModalUserOpen(false);
         }
     };
+
     const handleDeleteUser = (id: string) =>
         setUsuarios(prev => prev.filter(u => u.id !== id));
 
-    // Materias: modales
+    // Materias: modales y guardado
     const openNewMat = () => {
         setEditingMat(null);
         setMatForm({ nombre: '' });
@@ -270,7 +278,7 @@ const DashboardEncargado: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
-                {/* Paginacion Usuarios */}
+                {/* Paginación Usuarios */}
                 <div className="flex justify-between items-center mt-4">
                     <span>Página {userPage} de {userPageCount}</span>
                     <div className="flex gap-2">
@@ -329,7 +337,7 @@ const DashboardEncargado: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
-                {/* Paginacion Materias */}
+                {/* Paginación Materias */}
                 <div className="flex justify-between items-center mt-4">
                     <span>Página {matPage} de {matPageCount}</span>
                     <div className="flex gap-2">
@@ -376,10 +384,10 @@ const DashboardEncargado: React.FC = () => {
                             <option value="" disabled>Selecciona una materia</option>
                             {materias.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                         </select>
-                        {userError && <div className="text-red-600 text-sm">{userError}</div>}
+                        {userError && <div className="text-red-600	text-sm">{userError}</div>}
                         <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => setModalUserOpen(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancelar</button>
-                            <button type="submit" className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]">{editingUser ? 'Guardar' : 'Crear'}</button>
+                            <button type="button" onClick={() => setModalUserOpen(false)} className="px-4 py-2 rounded	bg-gray-100 hover:bg-gray-200">Cancelar</button>
+                            <button type="submit" className="px-4 py-2 rounded	bg-[#003c71] text-white hover:bg-[#002f59]">{editingUser ? 'Guardar' : 'Crear'}</button>
                         </div>
                     </form>
                 </Dialog.Panel>
@@ -392,10 +400,10 @@ const DashboardEncargado: React.FC = () => {
                     <form onSubmit={e => { e.preventDefault(); handleSubmitMat(); }} className="space-y-4">
                         <input type="text" placeholder="Nombre materia" required className="w-full border rounded px-3 py-2"
                             value={matForm.nombre} onChange={e => setMatForm({ nombre: e.target.value })} />
-                        {matError && <div className="text-red-600 text-sm">{matError}</div>}
-                        <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => setModalMatOpen(false)} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancelar</button>
-                            <button type="submit" className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]">{editingMat ? 'Guardar' : 'Crear'}</button>
+                        {matError && <div className="text-red-600	text-sm">{matError}</div>}
+                        <div className="flex justify-end	gap-2">
+                            <button type="button" onClick={() => setModalMatOpen(false)} className="px-4 py-2 rounded	bg-gray-100 hover:bg-gray-200">Cancelar</button>
+                            <button type="submit" className="px-4 py-2 rounded	bg-[#003c71] text-white hover:bg-[#002f59]">{editingMat ? 'Guardar' : 'Crear'}</button>
                         </div>
                     </form>
                 </Dialog.Panel>
