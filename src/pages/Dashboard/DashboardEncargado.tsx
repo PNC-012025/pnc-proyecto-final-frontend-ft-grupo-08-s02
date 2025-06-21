@@ -368,7 +368,6 @@ const DashboardEncargado: React.FC = () => {
                             value={userPass} onChange={e => setUserPass(e.target.value)} />
                         <select value={userForm.rol} onChange={e => setUserForm({ ...userForm, rol: e.target.value as Role })}
                             className="w-full border rounded px-3 py-2">
-                            <option value="ESTUDIANTE">Estudiante</option>
                             <option value="INSTRUCTOR_SOCIAL">Instructor Social</option>
                             <option value="INSTRUCTOR_REMUNERADO">Instructor Remunerado</option>
                         </select>
