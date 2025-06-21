@@ -10,7 +10,7 @@ import img2 from '../../assets/login/edificio.jpg';
 import img3 from '../../assets/login/Mural.jpg';
 
 interface FormValues {
-    email: string;
+    carnet: string;
     password: string;
     remember: boolean;
 }
@@ -35,7 +35,7 @@ const slides = [
 
 const Login: React.FC = () => {
     const [values, setValues] = useState<FormValues>({
-        email: '',
+        carnet: '',
         password: '',
         remember: false,
     });
@@ -46,7 +46,7 @@ const Login: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
-        setValues((v) => ({
+        setValues(v => ({
             ...v,
             [name]: type === 'checkbox' ? checked : value,
         }));
@@ -56,8 +56,12 @@ const Login: React.FC = () => {
         e.preventDefault();
         setError(null);
         setLoading(true);
+
+        // Construir email completo a partir del carnet
+        const email = `${values.carnet.trim()}@uca.edu.sv`;
+
         try {
-            await login({ email: values.email, password: values.password });
+            await login({ email, password: values.password });
             navigate('/dashboard');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Credenciales inválidas');
@@ -68,7 +72,7 @@ const Login: React.FC = () => {
 
     return (
         <div className="min-h-screen flex flex-col lg:flex-row font-sans">
-            {/* Panel izquierdo con carrusel de imagen y texto */}
+            {/* Carrusel lado izquierdo */}
             <div className="relative hidden lg:flex lg:w-[55%] bg-black shadow-xl">
                 <Carousel
                     autoPlay
@@ -77,7 +81,7 @@ const Login: React.FC = () => {
                     showStatus={false}
                     interval={5000}
                     showArrows={false}
-                    showIndicators={true}
+                    showIndicators
                     swipeable
                     className="w-full h-screen"
                 >
@@ -99,7 +103,7 @@ const Login: React.FC = () => {
                 </Carousel>
             </div>
 
-            {/* Panel derecho: login */}
+            {/* Panel de Login */}
             <div className="flex w-full lg:w-[45%] items-center justify-center p-6 bg-gray-50">
                 <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-2xl space-y-8 animate-fadeIn">
                     <div className="text-center space-y-2">
@@ -119,22 +123,22 @@ const Login: React.FC = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Input Email */}
-                        <div className="relative">
-                            <User className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={20} />
+                        {/* Carnet + dominio fijo */}
+                        <div className="relative flex items-center">
+                            <User className="absolute left-3 text-gray-400" size={20} />
                             <input
-                                type="email"
-                                name="email"
-                                value={values.email}
+                                type="text"
+                                name="carnet"
+                                value={values.carnet}
                                 onChange={handleChange}
                                 required
-                                placeholder="Correo electrónico"
-                                autoFocus
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
+                                placeholder="Carnet"
+                                className="w-full pl-10 pr-24 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
+                            <span className="absolute right-4 text-gray-500">@uca.edu.sv</span>
                         </div>
 
-                        {/* Input Password */}
+                        {/* Contraseña */}
                         <div className="relative">
                             <Lock className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={20} />
                             <input
@@ -148,7 +152,7 @@ const Login: React.FC = () => {
                             />
                         </div>
 
-                        {/* Remember me + link */}
+                        {/* Recordar + Olvidaste contraseña */}
                         <div className="flex items-center justify-between text-sm">
                             <label className="flex items-center space-x-2 text-gray-600">
                                 <input
@@ -165,7 +169,7 @@ const Login: React.FC = () => {
                             </Link>
                         </div>
 
-                        {/* Botón submit */}
+                        {/* Submit */}
                         <button
                             type="submit"
                             disabled={loading}
