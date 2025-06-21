@@ -3,32 +3,36 @@ import React, { useState, useEffect } from 'react';
 import { Plus, UserPlus, Edit2, Trash2 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
-import type { Usuario, Role } from '../../types';
+import type { Usuario, Role, Materia } from '../../types';
+import { crearUsuario } from '../../services/userService';
+import { asociarUsuarioConMateria } from '../../services/usuarioMateriaService';
+
+type UsuarioConMateria = Usuario & { materiaId?: string };
 
 const DashboardEncargado: React.FC = () => {
     const { user, logout } = useAuth();
 
-    // Estado de usuarios
-    const [usuarios, setUsuarios] = useState<Usuario[]>(() => {
-        return JSON.parse(localStorage.getItem('usuarios') || '[]');
-    });
-    const [passwords, setPasswords] = useState<Record<string, string>>(() => {
-        return JSON.parse(localStorage.getItem('passwords') || '{}');
-    });
-
-    // Modal de usuario
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Usuario | null>(null);
-    const [form, setForm] = useState<Omit<Usuario, 'id'>>({
+    // — Usuarios, ahora con materiaId opcional —
+    const [usuarios, setUsuarios] = useState<UsuarioConMateria[]>(() =>
+        JSON.parse(localStorage.getItem('usuarios') || '[]')
+    );
+    const [passwords, setPasswords] = useState<Record<string, string>>(() =>
+        JSON.parse(localStorage.getItem('passwords') || '{}')
+    );
+    const [modalUserOpen, setModalUserOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<UsuarioConMateria | null>(null);
+    const [userForm, setUserForm] = useState<Omit<UsuarioConMateria, 'id'>>({
         nombre: '',
         apellido: '',
         email: '',
         rol: 'ESTUDIANTE',
         codigoUsuario: '',
+        materiaId: '',
     });
-    const [formPass, setFormPass] = useState('');
+    const [userPass, setUserPass] = useState('');
+    const [selectedMateria, setSelectedMateria] = useState<string>('');
 
-    // Persistir cambios
+    // Persistir usuarios y contraseñas
     useEffect(() => {
         localStorage.setItem('usuarios', JSON.stringify(usuarios));
     }, [usuarios]);
@@ -36,57 +40,120 @@ const DashboardEncargado: React.FC = () => {
         localStorage.setItem('passwords', JSON.stringify(passwords));
     }, [passwords]);
 
-    const openNew = () => {
-        setEditing(null);
-        setForm({ nombre: '', apellido: '', email: '', rol: 'ESTUDIANTE', codigoUsuario: '' });
-        setFormPass('');
-        setModalOpen(true);
-    };
+    // — Materias sobre localStorage —
+    const [materias, setMaterias] = useState<Materia[]>(() =>
+        JSON.parse(localStorage.getItem('materias') || '[]')
+    );
+    const [modalMatOpen, setModalMatOpen] = useState(false);
+    const [editingMat, setEditingMat] = useState<Materia | null>(null);
+    const [matForm, setMatForm] = useState<{ nombre: string }>({ nombre: '' });
 
-    const openEdit = (u: Usuario) => {
-        setEditing(u);
-        setForm({
+    // Persistir materias
+    useEffect(() => {
+        localStorage.setItem('materias', JSON.stringify(materias));
+    }, [materias]);
+
+    // — Usuarios: abrir modal —
+    const openNewUser = () => {
+        setEditingUser(null);
+        setUserForm({
+            nombre: '',
+            apellido: '',
+            email: '',
+            rol: 'ESTUDIANTE',
+            codigoUsuario: '',
+            materiaId: '',
+        });
+        setUserPass('');
+        setSelectedMateria('');
+        setModalUserOpen(true);
+    };
+    const openEditUser = (u: UsuarioConMateria) => {
+        setEditingUser(u);
+        setUserForm({
             nombre: u.nombre,
             apellido: u.apellido,
             email: u.email,
             rol: u.rol,
             codigoUsuario: u.codigoUsuario,
+            materiaId: u.materiaId || '',
         });
-        setFormPass(passwords[u.email] || '');
-        setModalOpen(true);
+        setUserPass(passwords[u.email] || '');
+        setSelectedMateria(u.materiaId || '');
+        setModalUserOpen(true);
     };
 
-    const handleSubmit = () => {
-        if (editing) {
+    // — Usuarios: guardar cambios o crear nuevo —
+    const handleSubmitUser = async () => {
+        if (editingUser) {
             // Editar existente
             setUsuarios(prev =>
-                prev.map(u => (u.id === editing.id ? { ...editing, ...form } : u))
+                prev.map(u =>
+                    u.id === editingUser.id
+                        ? { ...editingUser, ...userForm, materiaId: selectedMateria }
+                        : u
+                )
             );
-            if (formPass) {
-                setPasswords(prev => ({ ...prev, [form.email]: formPass }));
+            if (userPass) {
+                setPasswords(prev => ({ ...prev, [userForm.email]: userPass }));
+            }
+            // también re-asocias en backend
+            if (selectedMateria) {
+                await asociarUsuarioConMateria(editingUser.id, selectedMateria);
             }
         } else {
             // Crear nuevo
             const id = Date.now().toString();
-            const nu: Usuario = { id, ...form };
+            const nu: UsuarioConMateria = {
+                id,
+                ...userForm,
+                materiaId: selectedMateria,
+            };
             setUsuarios(prev => [...prev, nu]);
-            setPasswords(prev => ({ ...prev, [form.email]: formPass }));
+            setPasswords(prev => ({ ...prev, [userForm.email]: userPass }));
+            if (selectedMateria) {
+                await asociarUsuarioConMateria(id, selectedMateria);
+            }
         }
-        setModalOpen(false);
+        setModalUserOpen(false);
+    };
+    const handleDeleteUser = (id: string) => {
+        setUsuarios(prev => prev.filter(u => u.id !== id));
     };
 
-    const handleDelete = (id: string) => {
-        setUsuarios(prev => prev.filter(u => u.id !== id));
+    // — Materias: crear/editar/eliminar sobre localStorage —
+    const openNewMat = () => {
+        setEditingMat(null);
+        setMatForm({ nombre: '' });
+        setModalMatOpen(true);
+    };
+    const openEditMat = (m: Materia) => {
+        setEditingMat(m);
+        setMatForm({ nombre: m.nombre });
+        setModalMatOpen(true);
+    };
+    const handleSubmitMat = () => {
+        if (editingMat) {
+            setMaterias(prev =>
+                prev.map(m => (m.id === editingMat.id ? { ...m, nombre: matForm.nombre } : m))
+            );
+        } else {
+            const id = Date.now().toString();
+            const nueva: Materia = { id, nombre: matForm.nombre };
+            setMaterias(prev => [...prev, nueva]);
+        }
+        setModalMatOpen(false);
+    };
+    const handleDeleteMat = (id: string) => {
+        setMaterias(prev => prev.filter(m => m.id !== id));
     };
 
     return (
         <div className="space-y-6 p-4">
             <header className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-[#003c71]">
-                        Bienvenido, {user?.nombre}
-                    </h1>
-                </div>
+                <h1 className="text-2xl font-bold text-[#003c71]">
+                    Bienvenido, {user?.nombre}
+                </h1>
                 <button
                     onClick={logout}
                     className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
@@ -100,7 +167,7 @@ const DashboardEncargado: React.FC = () => {
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Usuarios</h2>
                     <button
-                        onClick={openNew}
+                        onClick={openNewUser}
                         className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]"
                     >
                         <UserPlus size={16} /> Nuevo usuario
@@ -114,29 +181,34 @@ const DashboardEncargado: React.FC = () => {
                                 <th className="px-3 py-2">Email</th>
                                 <th className="px-3 py-2">Rol</th>
                                 <th className="px-3 py-2">Código</th>
+                                <th className="px-3 py-2">Materia</th>
                                 <th className="px-3 py-2">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {usuarios.map(u => (
-                                <tr key={u.id} className="border-b hover:bg-gray-50">
-                                    <td className="px-3 py-2">{u.nombre} {u.apellido}</td>
-                                    <td className="px-3 py-2">{u.email}</td>
-                                    <td className="px-3 py-2">{u.rol}</td>
-                                    <td className="px-3 py-2">{u.codigoUsuario}</td>
-                                    <td className="px-3 py-2 flex gap-2">
-                                        <button onClick={() => openEdit(u)} className="text-blue-600">
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button onClick={() => handleDelete(u.id)} className="text-red-600">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {usuarios.map(u => {
+                                const mat = materias.find(m => m.id === u.materiaId);
+                                return (
+                                    <tr key={u.id} className="border-b hover:bg-gray-50">
+                                        <td className="px-3 py-2">{u.nombre} {u.apellido}</td>
+                                        <td className="px-3 py-2">{u.email}</td>
+                                        <td className="px-3 py-2">{u.rol}</td>
+                                        <td className="px-3 py-2">{u.codigoUsuario}</td>
+                                        <td className="px-3 py-2">{mat?.nombre || '—'}</td>
+                                        <td className="px-3 py-2 flex gap-2">
+                                            <button onClick={() => openEditUser(u)} className="text-blue-600">
+                                                <Edit2 size={16} />
+                                            </button>
+                                            <button onClick={() => handleDeleteUser(u.id)} className="text-red-600">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             {usuarios.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
+                                    <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
                                         No hay usuarios.
                                     </td>
                                 </tr>
@@ -146,76 +218,137 @@ const DashboardEncargado: React.FC = () => {
                 </div>
             </section>
 
-            {/* Modal Crear/Editar Usuario */}
+            {/* Materias */}
+            <section className="bg-white rounded-xl shadow p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold text-[#003c71]">Materias</h2>
+                    <button
+                        onClick={openNewMat}
+                        className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]"
+                    >
+                        <Plus size={16} /> Nueva materia
+                    </button>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead>
+                            <tr className="bg-gray-100 text-gray-700">
+                                <th className="px-3 py-2">Nombre</th>
+                                <th className="px-3 py-2">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {materias.map(m => (
+                                <tr key={m.id} className="border-b hover:bg-gray-50">
+                                    <td className="px-3 py-2">{m.nombre}</td>
+                                    <td className="px-3 py-2 flex gap-2">
+                                        <button onClick={() => openEditMat(m)} className="text-blue-600">
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDeleteMat(m.id)} className="text-red-600">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {materias.length === 0 && (
+                                <tr>
+                                    <td colSpan={2} className="px-3 py-4 text-center text-gray-500">
+                                        No hay materias.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            {/* Modal Usuario */}
             <Dialog
-                open={modalOpen}
-                onClose={() => setModalOpen(false)}
-                className="fixed inset-0 z-50 flex items-center justify-center"
+                open={modalUserOpen}
+                onClose={() => setModalUserOpen(false)}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
+
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">
-                        {editing ? 'Editar usuario' : 'Nuevo usuario'}
+                        {editingUser ? 'Editar usuario' : 'Nuevo usuario'}
                     </Dialog.Title>
                     <form
                         onSubmit={e => {
                             e.preventDefault();
-                            handleSubmit();
+                            handleSubmitUser();
                         }}
                         className="space-y-4"
                     >
                         <input
                             type="text"
                             placeholder="Nombre"
-                            value={form.nombre}
-                            onChange={e => setForm({ ...form, nombre: e.target.value })}
+                            value={userForm.nombre}
+                            onChange={e => setUserForm({ ...userForm, nombre: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <input
                             type="text"
                             placeholder="Apellido"
-                            value={form.apellido}
-                            onChange={e => setForm({ ...form, apellido: e.target.value })}
+                            value={userForm.apellido}
+                            onChange={e => setUserForm({ ...userForm, apellido: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <input
                             type="email"
                             placeholder="Email"
-                            value={form.email}
-                            onChange={e => setForm({ ...form, email: e.target.value })}
+                            value={userForm.email}
+                            onChange={e => setUserForm({ ...userForm, email: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <input
                             type="password"
                             placeholder="Contraseña"
-                            value={formPass}
-                            onChange={e => setFormPass(e.target.value)}
+                            value={userPass}
+                            onChange={e => setUserPass(e.target.value)}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <select
-                            value={form.rol}
-                            onChange={e => setForm({ ...form, rol: e.target.value as Role })}
+                            value={userForm.rol}
+                            onChange={e => setUserForm({ ...userForm, rol: e.target.value as Role })}
                             className="w-full border rounded px-3 py-2"
                         >
                             <option value="ESTUDIANTE">Estudiante</option>
                             <option value="INSTRUCTOR_SOCIAL">Instructor Social</option>
                             <option value="INSTRUCTOR_REMUNERADO">Instructor Remunerado</option>
                         </select>
+                        <select
+                            value={selectedMateria}
+                            onChange={e => setSelectedMateria(e.target.value)}
+                            className="w-full border rounded px-3 py-2"
+                            required={!editingUser}
+                        >
+                            <option value="" disabled>
+                                Selecciona una materia
+                            </option>
+                            {materias.map(m => (
+                                <option key={m.id} value={m.id}>
+                                    {m.nombre}
+                                </option>
+                            ))}
+                        </select>
                         <input
                             type="text"
                             placeholder="Código de usuario"
-                            value={form.codigoUsuario}
-                            onChange={e => setForm({ ...form, codigoUsuario: e.target.value })}
+                            value={userForm.codigoUsuario}
+                            onChange={e => setUserForm({ ...userForm, codigoUsuario: e.target.value })}
                             className="w-full border rounded px-3 py-2"
                             required
                         />
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => setModalOpen(false)}
+                                onClick={() => setModalUserOpen(false)}
                                 className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
                             >
                                 Cancelar
@@ -224,7 +357,52 @@ const DashboardEncargado: React.FC = () => {
                                 type="submit"
                                 className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]"
                             >
-                                {editing ? 'Guardar cambios' : 'Crear usuario'}
+                                {editingUser ? 'Guardar cambios' : 'Crear usuario'}
+                            </button>
+                        </div>
+                    </form>
+                </Dialog.Panel>
+            </Dialog>
+
+            {/* Modal Materia */}
+            <Dialog
+                open={modalMatOpen}
+                onClose={() => setModalMatOpen(false)}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+
+                <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+                    <Dialog.Title className="text-lg font-semibold mb-4">
+                        {editingMat ? 'Editar materia' : 'Nueva materia'}
+                    </Dialog.Title>
+                    <form
+                        onSubmit={e => {
+                            e.preventDefault();
+                            handleSubmitMat();
+                        }}
+                        className="space-y-4"
+                    >
+                        <input
+                            type="text"
+                            placeholder="Nombre de materia"
+                            value={matForm.nombre}
+                            onChange={e => setMatForm({ nombre: e.target.value })}
+                            className="w-full border rounded px-3 py-2"
+                            required
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setModalMatOpen(false)}
+                                className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]"
+                            >
+                                {editingMat ? 'Guardar cambios' : 'Crear materia'}
                             </button>
                         </div>
                     </form>
