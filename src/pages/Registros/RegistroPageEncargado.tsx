@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useAuth from '../../hooks/useAuth';
 import type { Usuario } from '../../types';
 
@@ -14,15 +14,20 @@ type RegistroLocal = {
     estudianteId: string;
 };
 
+const ITEMS_PER_PAGE = 15;
+
 const RegistroPageEncargado: React.FC = () => {
     const { user } = useAuth();
 
-    // Cargar registros e usuarios desde localStorage
+    // Cargar registros y usuarios desde localStorage
     const [registros, setRegistros] = useState<RegistroLocal[]>([]);
     const [usuarios, setUsuarios] = useState<Usuario[]>(() =>
         JSON.parse(localStorage.getItem('usuarios') || '[]')
     );
     const [filterCodigo, setFilterCodigo] = useState<string>('all');
+
+    // Paginación
+    const [page, setPage] = useState(1);
 
     useEffect(() => {
         const data = localStorage.getItem('registros');
@@ -31,32 +36,50 @@ const RegistroPageEncargado: React.FC = () => {
         }
     }, []);
 
-    // Devuelve el codigoUsuario o el id si no se encuentra
+    // Helpers para extraer datos del estudiante
     const getCodigoEstudiante = (r: RegistroLocal) => {
         const u = usuarios.find(u => u.id === r.estudianteId);
         return u ? u.codigoUsuario : r.estudianteId;
     };
-
-    // Devuelve el nombre completo o el id
     const getNombreEstudiante = (r: RegistroLocal) => {
         const u = usuarios.find(u => u.id === r.estudianteId);
         return u ? `${u.nombre} ${u.apellido}` : r.estudianteId;
     };
 
     // Opciones unicas para el filtro
-    const codigosUnicos = Array.from(
-        new Set(registros.map(getCodigoEstudiante))
+    const codigosUnicos = useMemo(
+        () => Array.from(new Set(registros.map(getCodigoEstudiante))),
+        [registros]
     );
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setFilterCodigo(e.target.value);
+        setPage(1);
     };
 
-    // Filtrar por codigo (o "all" para ver todos)
-    const registrosFiltrados = registros.filter(r => {
-        const code = getCodigoEstudiante(r);
-        return filterCodigo === 'all' || code === filterCodigo;
-    });
+    // Filtrar por código (o "all" para ver todos)
+    const registrosFiltrados = useMemo(
+        () =>
+            registros.filter(r => {
+                const code = getCodigoEstudiante(r);
+                return filterCodigo === 'all' || code === filterCodigo;
+            }),
+        [registros, filterCodigo]
+    );
+
+    // Paginacion
+    const pageCount = Math.max(
+        1,
+        Math.ceil(registrosFiltrados.length / ITEMS_PER_PAGE)
+    );
+    const paginated = useMemo(
+        () =>
+            registrosFiltrados.slice(
+                (page - 1) * ITEMS_PER_PAGE,
+                page * ITEMS_PER_PAGE
+            ),
+        [registrosFiltrados, page]
+    );
 
     return (
         <div className="space-y-6 p-4">
@@ -69,7 +92,7 @@ const RegistroPageEncargado: React.FC = () => {
                 </span>
             </div>
 
-            {/* Filtro por código de usuario */}
+            {/* Filtro por codigo de usuario */}
             <div className="flex items-center gap-4">
                 <label htmlFor="codigoSelect" className="font-medium">
                     Filtrar por código:
@@ -89,7 +112,7 @@ const RegistroPageEncargado: React.FC = () => {
                 </select>
             </div>
 
-            {/* Tabla de histórico */}
+            {/* Tabla de historico */}
             <div className="overflow-x-auto">
                 <table className="min-w-full bg-white rounded shadow">
                     <thead>
@@ -106,7 +129,7 @@ const RegistroPageEncargado: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {registrosFiltrados.map(r => (
+                        {paginated.map(r => (
                             <tr key={r.id} className="border-b hover:bg-gray-50">
                                 <td className="px-4 py-2">{getCodigoEstudiante(r)}</td>
                                 <td className="px-4 py-2">{getNombreEstudiante(r)}</td>
@@ -131,7 +154,7 @@ const RegistroPageEncargado: React.FC = () => {
                                 </td>
                             </tr>
                         ))}
-                        {registrosFiltrados.length === 0 && (
+                        {paginated.length === 0 && (
                             <tr>
                                 <td
                                     colSpan={9}
@@ -143,6 +166,29 @@ const RegistroPageEncargado: React.FC = () => {
                         )}
                     </tbody>
                 </table>
+            </div>
+
+            {/* Controles de Paginacion */}
+            <div className="flex justify-between items-center mt-4">
+                <span>
+                    Página {page} de {pageCount}
+                </span>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                        Anterior
+                    </button>
+                    <button
+                        onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+                        disabled={page === pageCount}
+                        className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                        Siguiente
+                    </button>
+                </div>
             </div>
         </div>
     );
