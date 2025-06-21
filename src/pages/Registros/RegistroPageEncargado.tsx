@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import useAuth from '../../hooks/useAuth';
-import type { Usuario } from '../../types';
+import type { Usuario, Materia } from '../../types';
 
 type RegistroLocal = {
     id: string;
@@ -14,19 +14,26 @@ type RegistroLocal = {
     estudianteId: string;
 };
 
+type UsuarioConMateria = Usuario & { materiaId?: string };
+
 const ITEMS_PER_PAGE = 15;
 
 const RegistroPageEncargado: React.FC = () => {
     const { user } = useAuth();
 
-    // Cargar registros y usuarios desde localStorage
+    // Registros del localStorage
     const [registros, setRegistros] = useState<RegistroLocal[]>([]);
-    const [usuarios, setUsuarios] = useState<Usuario[]>(() =>
+    // Usuarios con materia asociada
+    const [usuarios] = useState<UsuarioConMateria[]>(() =>
         JSON.parse(localStorage.getItem('usuarios') || '[]')
     );
-    const [filterCodigo, setFilterCodigo] = useState<string>('all');
+    // Materias para lookup
+    const [materias] = useState<Materia[]>(() =>
+        JSON.parse(localStorage.getItem('materias') || '[]')
+    );
 
-    // Paginación
+    // Búsqueda por código
+    const [searchCodigo, setSearchCodigo] = useState<string>('');
     const [page, setPage] = useState(1);
 
     useEffect(() => {
@@ -45,33 +52,28 @@ const RegistroPageEncargado: React.FC = () => {
         const u = usuarios.find(u => u.id === r.estudianteId);
         return u ? `${u.nombre} ${u.apellido}` : r.estudianteId;
     };
-
-    // Opciones unicas para el filtro
-    const codigosUnicos = useMemo(
-        () => Array.from(new Set(registros.map(getCodigoEstudiante))),
-        [registros]
-    );
-
-    const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setFilterCodigo(e.target.value);
-        setPage(1);
+    const getMateriaEstudiante = (r: RegistroLocal) => {
+        const u = usuarios.find(u => u.id === r.estudianteId);
+        if (!u || !u.materiaId) return '—';
+        const m = materias.find(m => m.id === u.materiaId);
+        return m ? m.nombre : '—';
     };
 
-    // Filtrar por código (o "all" para ver todos)
-    const registrosFiltrados = useMemo(
-        () =>
-            registros.filter(r => {
-                const code = getCodigoEstudiante(r);
-                return filterCodigo === 'all' || code === filterCodigo;
-            }),
-        [registros, filterCodigo]
-    );
+    // Filtrado por búsqueda de código
+    const registrosFiltrados = useMemo(() => {
+        const term = searchCodigo.trim().toLowerCase();
+        return registros.filter(r =>
+            getCodigoEstudiante(r).toLowerCase().includes(term)
+        );
+    }, [registros, searchCodigo]);
 
-    // Paginacion
+    // Cálculo de páginas
     const pageCount = Math.max(
         1,
         Math.ceil(registrosFiltrados.length / ITEMS_PER_PAGE)
     );
+
+    // Registros a mostrar en la página actual
     const paginated = useMemo(
         () =>
             registrosFiltrados.slice(
@@ -92,33 +94,32 @@ const RegistroPageEncargado: React.FC = () => {
                 </span>
             </div>
 
-            {/* Filtro por codigo de usuario */}
+            {/* Buscador por código */}
             <div className="flex items-center gap-4">
-                <label htmlFor="codigoSelect" className="font-medium">
-                    Filtrar por código:
+                <label htmlFor="searchCodigo" className="font-medium">
+                    Buscar por código:
                 </label>
-                <select
-                    id="codigoSelect"
-                    value={filterCodigo}
-                    onChange={handleFilterChange}
+                <input
+                    id="searchCodigo"
+                    type="text"
+                    placeholder="Escribe el código..."
                     className="border rounded px-3 py-1"
-                >
-                    <option value="all">Todos</option>
-                    {codigosUnicos.map(c => (
-                        <option key={c} value={c}>
-                            {c}
-                        </option>
-                    ))}
-                </select>
+                    value={searchCodigo}
+                    onChange={e => {
+                        setSearchCodigo(e.target.value);
+                        setPage(1);
+                    }}
+                />
             </div>
 
-            {/* Tabla de historico */}
+            {/* Tabla de histórico */}
             <div className="overflow-x-auto">
                 <table className="min-w-full bg-white rounded shadow">
                     <thead>
                         <tr className="bg-gray-100 text-gray-700 text-left">
                             <th className="px-4 py-2">Código</th>
                             <th className="px-4 py-2">Estudiante</th>
+                            <th className="px-4 py-2">Materia</th>
                             <th className="px-4 py-2">Fecha</th>
                             <th className="px-4 py-2">Hora Inicio</th>
                             <th className="px-4 py-2">Hora Fin</th>
@@ -133,6 +134,7 @@ const RegistroPageEncargado: React.FC = () => {
                             <tr key={r.id} className="border-b hover:bg-gray-50">
                                 <td className="px-4 py-2">{getCodigoEstudiante(r)}</td>
                                 <td className="px-4 py-2">{getNombreEstudiante(r)}</td>
+                                <td className="px-4 py-2">{getMateriaEstudiante(r)}</td>
                                 <td className="px-4 py-2">{r.fecha}</td>
                                 <td className="px-4 py-2">{r.horaInicio}</td>
                                 <td className="px-4 py-2">{r.horaFin}</td>
@@ -157,7 +159,7 @@ const RegistroPageEncargado: React.FC = () => {
                         {paginated.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={9}
+                                    colSpan={10}
                                     className="px-4 py-2 text-center text-gray-500"
                                 >
                                     No hay registros.
@@ -168,7 +170,7 @@ const RegistroPageEncargado: React.FC = () => {
                 </table>
             </div>
 
-            {/* Controles de Paginacion */}
+            {/* Controles de paginación */}
             <div className="flex justify-between items-center mt-4">
                 <span>
                     Página {page} de {pageCount}
