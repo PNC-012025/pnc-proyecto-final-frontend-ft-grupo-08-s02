@@ -17,6 +17,9 @@ import useAuth from '../../hooks/useAuth';
 
 interface RegistroHora {
     id: number;
+    estudianteId: string;
+    estudianteNombre: string;     // ← nuevo
+    estudianteApellido: string;   // ← nuevo
     fecha: string;
     horaInicio: string;
     horaFin: string;
@@ -24,7 +27,6 @@ interface RegistroHora {
     aula: string;
     horasEfectivas: number;
     estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-    estudianteId: string;
 }
 
 const calcularHoras = (inicio: string, fin: string): number => {
@@ -37,6 +39,8 @@ const calcularHoras = (inicio: string, fin: string): number => {
 const DashboardEstudiante: React.FC = () => {
     const { user } = useAuth();
     const userId = user?.id ?? '';
+    const nombre = user?.nombre ?? '';
+    const apellido = user?.apellido ?? '';
 
     // Carga inicial: todos los registros de este estudiante
     const [registros, setRegistros] = useState<RegistroHora[]>(() => {
@@ -48,7 +52,7 @@ const DashboardEstudiante: React.FC = () => {
     const [editing, setEditing] = useState<RegistroHora | null>(null);
 
     const [form, setForm] = useState<
-        Omit<RegistroHora, 'id' | 'horasEfectivas' | 'estado' | 'estudianteId'>
+        Omit<RegistroHora, 'id' | 'horasEfectivas' | 'estado' | 'estudianteId' | 'estudianteNombre' | 'estudianteApellido'>
     >({
         fecha: '',
         horaInicio: '',
@@ -70,16 +74,26 @@ const DashboardEstudiante: React.FC = () => {
         if (editing) {
             setRegistros(prev =>
                 prev.map(r =>
-                    r.id === editing.id ? { ...r, ...form, horasEfectivas } : r
+                    r.id === editing.id
+                        ? {
+                            ...r,
+                            ...form,
+                            horasEfectivas,
+                            estudianteNombre: nombre,     // ← inyectado
+                            estudianteApellido: apellido  // ← inyectado
+                        }
+                        : r
                 )
             );
         } else {
             const nuevo: RegistroHora = {
                 id: Date.now(),
+                estudianteId: userId,
+                estudianteNombre: nombre,     // ← inyectado
+                estudianteApellido: apellido, // ← inyectado
                 ...form,
                 horasEfectivas,
-                estado: 'PENDIENTE',
-                estudianteId: userId
+                estado: 'PENDIENTE'
             };
             setRegistros(prev => [...prev, nuevo]);
         }

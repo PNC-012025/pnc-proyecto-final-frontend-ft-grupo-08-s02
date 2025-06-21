@@ -25,7 +25,7 @@ const RegistrosPage: React.FC = () => {
         const data = localStorage.getItem('registros');
         if (data) {
             const all = JSON.parse(data) as RegistroHora[];
-            setRegistros(all.filter(r => r.estudianteId === userId));
+            setRegistros(all.filter(r => r.estudianteId === user?.nombre));
         }
     }, [userId]);
 
