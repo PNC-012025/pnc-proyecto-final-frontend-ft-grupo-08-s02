@@ -10,55 +10,33 @@ type UsuarioConMateria = Usuario & { materiaId?: string };
 const DashboardEncargado: React.FC = () => {
     const { user, logout } = useAuth();
 
-    // — Usuarios, con materiaId opcional —
-    const [usuarios, setUsuarios] = useState<UsuarioConMateria[]>(() =>
-        JSON.parse(localStorage.getItem('usuarios') || '[]')
-    );
-    const [passwords, setPasswords] = useState<Record<string, string>>(() =>
-        JSON.parse(localStorage.getItem('passwords') || '{}')
-    );
+    // Usuarios
+    const [usuarios, setUsuarios] = useState<UsuarioConMateria[]>(() => JSON.parse(localStorage.getItem('usuarios') || '[]'));
+    const [passwords, setPasswords] = useState<Record<string, string>>(() => JSON.parse(localStorage.getItem('passwords') || '{}'));
     const [modalUserOpen, setModalUserOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<UsuarioConMateria | null>(null);
-    const [userForm, setUserForm] = useState<Omit<UsuarioConMateria, 'id'>>({
-        nombre: '',
-        apellido: '',
-        email: '',
-        rol: 'ESTUDIANTE',
-        codigoUsuario: '',
-        materiaId: '',
-    });
+    const [userForm, setUserForm] = useState<Omit<UsuarioConMateria, 'id'>>({ nombre: '', apellido: '', email: '', rol: 'ESTUDIANTE', codigoUsuario: '', materiaId: '' });
     const [userPass, setUserPass] = useState('');
-    const [selectedMateria, setSelectedMateria] = useState<string>('');
+    const [selectedMateria, setSelectedMateria] = useState('');
     const [userError, setUserError] = useState<string | null>(null);
 
-    // Persistir usuarios y contraseñas
-    useEffect(() => {
-        localStorage.setItem('usuarios', JSON.stringify(usuarios));
-    }, [usuarios]);
-    useEffect(() => {
-        localStorage.setItem('passwords', JSON.stringify(passwords));
-    }, [passwords]);
+    // Persistencia usuarios
+    useEffect(() => { localStorage.setItem('usuarios', JSON.stringify(usuarios)); }, [usuarios]);
+    useEffect(() => { localStorage.setItem('passwords', JSON.stringify(passwords)); }, [passwords]);
 
-    // — Materias en localStorage —
-    const [materias, setMaterias] = useState<Materia[]>(() =>
-        JSON.parse(localStorage.getItem('materias') || '[]')
-    );
+    // Materias
+    const [materias, setMaterias] = useState<Materia[]>(() => JSON.parse(localStorage.getItem('materias') || '[]'));
     const [modalMatOpen, setModalMatOpen] = useState(false);
     const [editingMat, setEditingMat] = useState<Materia | null>(null);
     const [matForm, setMatForm] = useState<{ nombre: string }>({ nombre: '' });
     const [matError, setMatError] = useState<string | null>(null);
 
-    useEffect(() => {
-        localStorage.setItem('materias', JSON.stringify(materias));
-    }, [materias]);
+    useEffect(() => { localStorage.setItem('materias', JSON.stringify(materias)); }, [materias]);
 
-    // — Abrir modal usuario —
+    // Abrir modal usuario
     const openNewUser = () => {
         setEditingUser(null);
-        setUserForm({
-            nombre: '', apellido: '', email: '',
-            rol: 'ESTUDIANTE', codigoUsuario: '', materiaId: ''
-        });
+        setUserForm({ nombre: '', apellido: '', email: '', rol: 'ESTUDIANTE', codigoUsuario: '', materiaId: '' });
         setUserPass('');
         setSelectedMateria('');
         setUserError(null);
@@ -66,127 +44,65 @@ const DashboardEncargado: React.FC = () => {
     };
     const openEditUser = (u: UsuarioConMateria) => {
         setEditingUser(u);
-        setUserForm({
-            nombre: u.nombre, apellido: u.apellido,
-            email: u.email, rol: u.rol,
-            codigoUsuario: u.codigoUsuario,
-            materiaId: u.materiaId || ''
-        });
+        setUserForm({ nombre: u.nombre, apellido: u.apellido, email: u.email, rol: u.rol, codigoUsuario: u.codigoUsuario, materiaId: u.materiaId || '' });
         setUserPass(passwords[u.email] || '');
         setSelectedMateria(u.materiaId || '');
         setUserError(null);
         setModalUserOpen(true);
     };
 
-    // — Validar y guardar usuario —
+    // Guardar usuario
     const handleSubmitUser = async () => {
         setUserError(null);
-        // validar duplicados
-        const dup = usuarios.some(u =>
-            u.email === userForm.email || u.codigoUsuario === userForm.codigoUsuario
-        );
-        if (!editingUser && dup) {
-            setUserError('Email o código ya registrado');
-            return;
-        }
+        const dup = usuarios.some(u => u.email === userForm.email || u.codigoUsuario === userForm.codigoUsuario);
+        if (!editingUser && dup) { setUserError('Email o código ya registrado'); return; }
         try {
             if (editingUser) {
-                setUsuarios(prev => prev.map(u =>
-                    u.id === editingUser.id
-                        ? { ...editingUser, ...userForm, materiaId: selectedMateria }
-                        : u
-                ));
+                setUsuarios(prev => prev.map(u => u.id === editingUser.id ? { ...editingUser, ...userForm, materiaId: selectedMateria } : u));
                 if (userPass) setPasswords(p => ({ ...p, [userForm.email]: userPass }));
-                if (selectedMateria) {
-                    try {
-                        await asociarUsuarioConMateria(editingUser.id, selectedMateria);
-                    } catch (e) { console.error(e); }
-                }
+                if (selectedMateria) await asociarUsuarioConMateria(editingUser.id, selectedMateria);
             } else {
-                const id = Date.now().toString();
-                const nuevo: UsuarioConMateria = {
-                    id, ...userForm, materiaId: selectedMateria
-                };
+                const id = userForm.codigoUsuario.trim();
+                const nuevo: UsuarioConMateria = { id, ...userForm, materiaId: selectedMateria };
                 setUsuarios(prev => [...prev, nuevo]);
                 setPasswords(p => ({ ...p, [userForm.email]: userPass }));
-                if (selectedMateria) {
-                    try {
-                        await asociarUsuarioConMateria(id, selectedMateria);
-                    } catch (e) { console.error(e); }
-                }
+                if (selectedMateria) await asociarUsuarioConMateria(id, selectedMateria);
             }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setModalUserOpen(false);
-        }
+        } catch (e) { console.error(e); }
+        finally { setModalUserOpen(false); }
     };
 
-    const handleDeleteUser = (id: string) =>
-        setUsuarios(prev => prev.filter(u => u.id !== id));
+    const handleDeleteUser = (id: string) => setUsuarios(prev => prev.filter(u => u.id !== id));
 
-    // — Abrir modal materia —
-    const openNewMat = () => {
-        setEditingMat(null);
-        setMatForm({ nombre: '' });
-        setMatError(null);
-        setModalMatOpen(true);
-    };
-    const openEditMat = (m: Materia) => {
-        setEditingMat(m);
-        setMatForm({ nombre: m.nombre });
-        setMatError(null);
-        setModalMatOpen(true);
-    };
+    // Abrir modal materia
+    const openNewMat = () => { setEditingMat(null); setMatForm({ nombre: '' }); setMatError(null); setModalMatOpen(true); };
+    const openEditMat = (m: Materia) => { setEditingMat(m); setMatForm({ nombre: m.nombre }); setMatError(null); setModalMatOpen(true); };
 
-    // — Validar y guardar materia —
+    // Guardar materia
     const handleSubmitMat = () => {
         setMatError(null);
-        const dup = materias.some(m =>
-            m.nombre.trim().toLowerCase() === matForm.nombre.trim().toLowerCase()
-        );
-        if (!editingMat && dup) {
-            setMatError('Materia duplicada');
-            return;
-        }
+        const dup = materias.some(m => m.nombre.toLowerCase().trim() === matForm.nombre.toLowerCase().trim());
+        if (!editingMat && dup) { setMatError('Materia duplicada'); return; }
         try {
-            if (editingMat) {
-                setMaterias(prev => prev.map(m =>
-                    m.id === editingMat.id ? { ...m, nombre: matForm.nombre } : m
-                ));
-            } else {
-                const id = Date.now().toString();
-                setMaterias(prev => [...prev, { id, nombre: matForm.nombre }]);
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setModalMatOpen(false);
-        }
+            if (editingMat) { setMaterias(prev => prev.map(m => m.id === editingMat.id ? { ...m, nombre: matForm.nombre } : m)); }
+            else { const id = Date.now().toString(); setMaterias(prev => [...prev, { id, nombre: matForm.nombre }]); }
+        } catch (e) { console.error(e); }
+        finally { setModalMatOpen(false); }
     };
 
-    const handleDeleteMat = (id: string) =>
-        setMaterias(prev => prev.filter(m => m.id !== id));
+    const handleDeleteMat = (id: string) => setMaterias(prev => prev.filter(m => m.id !== id));
 
     return (
         <div className="space-y-6 p-4">
-            {/* Header */}
             <header className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[#003c71]">
-                    Bienvenido, {user?.nombre}
-                </h1>
-                <button onClick={logout}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
-                    Cerrar sesión
-                </button>
+                <h1 className="text-2xl font-bold text-[#003c71]">Bienvenido, {user?.nombre}</h1>
+                <button onClick={logout} className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Cerrar sesión</button>
             </header>
 
-            {/* Usuarios */}
             <section className="bg-white rounded-xl shadow p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Usuarios</h2>
-                    <button onClick={openNewUser}
-                        className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]">
+                    <button onClick={openNewUser} className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]">
                         <UserPlus size={16} /> Nuevo usuario
                     </button>
                 </div>
@@ -217,7 +133,7 @@ const DashboardEncargado: React.FC = () => {
                                             <button onClick={() => handleDeleteUser(u.id)} className="text-red-600"><Trash2 size={16} /></button>
                                         </td>
                                     </tr>
-                                )
+                                );
                             })}
                             {usuarios.length === 0 && (
                                 <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-500">No hay usuarios.</td></tr>
@@ -227,12 +143,10 @@ const DashboardEncargado: React.FC = () => {
                 </div>
             </section>
 
-            {/* Materias */}
             <section className="bg-white rounded-xl shadow p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-[#003c71]">Materias</h2>
-                    <button onClick={openNewMat}
-                        className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]">
+                    <button onClick={openNewMat} className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]">
                         <Plus size={16} /> Nueva materia
                     </button>
                 </div>
@@ -245,7 +159,7 @@ const DashboardEncargado: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {materias.map(m => (
+                            {materias.map(m =>
                                 <tr key={m.id} className="border-b hover:bg-gray-50">
                                     <td className="px-3 py-2">{m.nombre}</td>
                                     <td className="px-3 py-2 flex gap-2">
@@ -253,7 +167,7 @@ const DashboardEncargado: React.FC = () => {
                                         <button onClick={() => handleDeleteMat(m.id)} className="text-red-600"><Trash2 size={16} /></button>
                                     </td>
                                 </tr>
-                            ))}
+                            )}
                             {materias.length === 0 && (
                                 <tr><td colSpan={2} className="px-3 py-4 text-center text-gray-500">No hay materias.</td></tr>
                             )}
@@ -272,15 +186,12 @@ const DashboardEncargado: React.FC = () => {
                         <input type="email" placeholder="Email" className="w-full border rounded px-3 py-2" required value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} />
                         <input type="password" placeholder="Contraseña" className="w-full border rounded px-3 py-2" required value={userPass} onChange={e => setUserPass(e.target.value)} />
                         <select className="w-full border rounded px-3 py-2" value={userForm.rol} onChange={e => setUserForm({ ...userForm, rol: e.target.value as Role })}>
-                            <option value="ESTUDIANTE">Estudiante</option>
                             <option value="INSTRUCTOR_SOCIAL">Instructor Social</option>
                             <option value="INSTRUCTOR_REMUNERADO">Instructor Remunerado</option>
                         </select>
                         <select className="w-full border rounded px-3 py-2" required={!editingUser} value={selectedMateria} onChange={e => setSelectedMateria(e.target.value)}>
                             <option value="" disabled>Selecciona una materia</option>
-                            {materias.map(m => (
-                                <option key={m.id} value={m.id}>{m.nombre}</option>
-                            ))}
+                            {materias.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                         </select>
                         <input type="text" placeholder="Código" className="w-full border rounded px-3 py-2" required value={userForm.codigoUsuario} onChange={e => setUserForm({ ...userForm, codigoUsuario: e.target.value })} />
                         {userError && <div className="text-red-600 text-sm">{userError}</div>}

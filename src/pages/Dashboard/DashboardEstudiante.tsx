@@ -1,247 +1,264 @@
+// src/pages/Dashboard/DashboardEstudiante.tsx
+
 import React, { useState, useEffect } from 'react';
-import { Plus, UserPlus, Edit2, Trash2 } from 'lucide-react';
+import {
+    BookOpen,
+    CalendarDays,
+    GraduationCap,
+    Mail,
+    School,
+    Users,
+    Plus,
+    Trash2,
+    Edit2
+} from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
-import type { Usuario, Role, Materia } from '../../types';
-import { crearUsuario, /* si usas el servicio */ } from '../../services/userService';
-import { listarMaterias } from '../../services/materiaService';
-import { asociarUsuarioConMateria } from '../../services/usuarioMateriaService';
 
-const DashboardEncargado: React.FC = () => {
-    const { user, logout } = useAuth();
+interface RegistroHora {
+    id: number;
+    estudianteId: string;
+    estudianteNombre: string;     // ← nuevo
+    estudianteApellido: string;   // ← nuevo
+    fecha: string;
+    horaInicio: string;
+    horaFin: string;
+    actividad: string;
+    aula: string;
+    horasEfectivas: number;
+    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+}
 
-    const [usuarios, setUsuarios] = useState<Usuario[]>(() =>
-        JSON.parse(localStorage.getItem('usuarios') || '[]')
-    );
-    const [passwords, setPasswords] = useState<Record<string, string>>(() =>
-        JSON.parse(localStorage.getItem('passwords') || '{}')
-    );
+const calcularHoras = (inicio: string, fin: string): number => {
+    const [hiH, hiM] = inicio.split(':').map(Number);
+    const [hfH, hfM] = fin.split(':').map(Number);
+    const diff = Math.max(0, (hfH * 60 + hfM) - (hiH * 60 + hiM));
+    return Math.round((diff / 60) * 100) / 100;
+};
 
-    // **NUEVO**: materias y selección
-    const [materias, setMaterias] = useState<Materia[]>([]);
-    const [selectedMateria, setSelectedMateria] = useState<string>('');
+const DashboardEstudiante: React.FC = () => {
+    const { user } = useAuth();
+    const userId = user?.id ?? '';
+    const nombre = user?.nombre ?? '';
+    const apellido = user?.apellido ?? '';
+
+    // Carga inicial: todos los registros de este estudiante
+    const [registros, setRegistros] = useState<RegistroHora[]>(() => {
+        const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
+        return all.filter(r => r.estudianteId === userId);
+    });
 
     const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Usuario | null>(null);
-    const [form, setForm] = useState<Omit<Usuario, 'id'>>({
-        nombre: '',
-        apellido: '',
-        email: '',
-        rol: 'ESTUDIANTE',
-        codigoUsuario: '',
+    const [editing, setEditing] = useState<RegistroHora | null>(null);
+
+    const [form, setForm] = useState<
+        Omit<RegistroHora, 'id' | 'horasEfectivas' | 'estado' | 'estudianteId' | 'estudianteNombre' | 'estudianteApellido'>
+    >({
+        fecha: '',
+        horaInicio: '',
+        horaFin: '',
+        actividad: '',
+        aula: ''
     });
-    const [formPass, setFormPass] = useState('');
 
-    // Persistir cambios
+    // Sincroniza localStorage cada vez que cambian los registros de este estudiante
     useEffect(() => {
-        localStorage.setItem('usuarios', JSON.stringify(usuarios));
-    }, [usuarios]);
-    useEffect(() => {
-        localStorage.setItem('passwords', JSON.stringify(passwords));
-    }, [passwords]);
+        const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
+        const otros = all.filter(r => r.estudianteId !== userId);
+        localStorage.setItem('registros', JSON.stringify([...otros, ...registros]));
+    }, [registros, userId]);
 
-    // **NUEVO**: cargar materias
-    useEffect(() => {
-        const mts = JSON.parse(localStorage.getItem('materias') || '[]') as Materia[];
-        if (mts.length) {
-            setMaterias(mts);
-        } else {
-            listarMaterias().then(res => setMaterias(res.data));
-        }
-    }, []);
+    const handleSubmit = () => {
+        const horasEfectivas = calcularHoras(form.horaInicio, form.horaFin);
 
-    const openNew = () => {
-        setEditing(null);
-        setForm({ nombre: '', apellido: '', email: '', rol: 'ESTUDIANTE', codigoUsuario: '' });
-        setFormPass('');
-        setSelectedMateria('');
-        setModalOpen(true);
-    };
-
-    const openEdit = (u: Usuario) => {
-        setEditing(u);
-        setForm({
-            nombre: u.nombre,
-            apellido: u.apellido,
-            email: u.email,
-            rol: u.rol,
-            codigoUsuario: u.codigoUsuario,
-        });
-        setFormPass(passwords[u.email] || '');
-        // no cambiamos materia al editar
-        setSelectedMateria('');
-        setModalOpen(true);
-    };
-
-    const handleSubmit = async () => {
         if (editing) {
-            // Editar existente
-            setUsuarios(prev =>
-                prev.map(u => (u.id === editing.id ? { ...editing, ...form } : u))
+            setRegistros(prev =>
+                prev.map(r =>
+                    r.id === editing.id
+                        ? {
+                            ...r,
+                            ...form,
+                            horasEfectivas,
+                            estudianteNombre: nombre,     // ← inyectado
+                            estudianteApellido: apellido  // ← inyectado
+                        }
+                        : r
+                )
             );
-            if (formPass) {
-                setPasswords(prev => ({ ...prev, [form.email]: formPass }));
-            }
         } else {
-            // Crear nuevo usuario
-            const id = Date.now().toString();
-            const nu: Usuario = { id, ...form };
-            setUsuarios(prev => [...prev, nu]);
-            setPasswords(prev => ({ ...prev, [form.email]: formPass }));
-
-            // **NUEVO**: asociar materia
-            if (selectedMateria) {
-                await asociarUsuarioConMateria(id, selectedMateria);
-            }
+            const nuevo: RegistroHora = {
+                id: Date.now(),
+                estudianteId: userId,
+                estudianteNombre: nombre,     // ← inyectado
+                estudianteApellido: apellido, // ← inyectado
+                ...form,
+                horasEfectivas,
+                estado: 'PENDIENTE'
+            };
+            setRegistros(prev => [...prev, nuevo]);
         }
+
         setModalOpen(false);
+        setForm({ fecha: '', horaInicio: '', horaFin: '', actividad: '', aula: '' });
+        setEditing(null);
     };
 
-    const handleDelete = (id: string) => {
-        setUsuarios(prev => prev.filter(u => u.id !== id));
+    const handleDelete = (id: number) => {
+        setRegistros(prev => prev.filter(r => r.id !== id));
     };
+
+    const handleEdit = (reg: RegistroHora) => {
+        setEditing(reg);
+        setForm({
+            fecha: reg.fecha,
+            horaInicio: reg.horaInicio,
+            horaFin: reg.horaFin,
+            actividad: reg.actividad,
+            aula: reg.aula
+        });
+        setModalOpen(true);
+    };
+
+    // Calcula horas aprobadas del estudiante
+    const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
+    const horasAprobadas = all
+        .filter(r => r.estudianteId === userId && r.estado === 'APROBADO')
+        .reduce((sum, r) => sum + r.horasEfectivas, 0);
+    const porcentaje = Math.min((horasAprobadas / 600) * 100, 100);
+
+    // Solo muestra registros con estado 'PENDIENTE'
+    const pendientes = registros.filter(r => r.estado === 'PENDIENTE');
 
     return (
-        <div className="space-y-6 p-4">
-            <header className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[#003c71]">
-                    Bienvenido, {user?.nombre}
-                </h1>
-                <button
-                    onClick={logout}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                >
-                    Cerrar sesión
-                </button>
-            </header>
+        <div className="space-y-8 p-4">
+            {/* Progreso */}
+            <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-semibold text-[#003c71] mb-2">
+                    Horas sociales acumuladas
+                </h2>
+                <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                    <div
+                        className="bg-blue-600 h-4 rounded-full"
+                        style={{ width: `${porcentaje}%` }}
+                    />
+                </div>
+                <p className="text-sm text-gray-600">
+                    {horasAprobadas} horas aprobadas de 600
+                </p>
+            </div>
 
-            <section className="bg-white rounded-xl shadow p-6">
+            {/* Tabla de registros pendientes */}
+            <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-[#003c71]">Usuarios</h2>
+                    <h2 className="text-xl font-semibold text-[#003c71]">Mis registros pendientes</h2>
                     <button
-                        onClick={openNew}
-                        className="flex items-center gap-2 bg-[#003c71] text-white px-4 py-2 rounded hover:bg-[#002f59]"
+                        onClick={() => setModalOpen(true)}
+                        className="flex items-center gap-2 text-sm text-white bg-[#003c71] px-4 py-2 rounded hover:bg-[#002f59]"
                     >
-                        <UserPlus size={16} /> Nuevo usuario
+                        <Plus size={16} /> Nuevo registro
                     </button>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead>
-                            <tr className="bg-gray-100 text-gray-700">
-                                <th className="px-3 py-2">Nombre</th>
-                                <th className="px-3 py-2">Email</th>
-                                <th className="px-3 py-2">Rol</th>
-                                <th className="px-3 py-2">Código</th>
-                                <th className="px-3 py-2">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {usuarios.map(u => (
-                                <tr key={u.id} className="border-b hover:bg-gray-50">
-                                    <td className="px-3 py-2">{u.nombre} {u.apellido}</td>
-                                    <td className="px-3 py-2">{u.email}</td>
-                                    <td className="px-3 py-2">{u.rol}</td>
-                                    <td className="px-3 py-2">{u.codigoUsuario}</td>
-                                    <td className="px-3 py-2 flex gap-2">
-                                        <button onClick={() => openEdit(u)} className="text-blue-600">
+
+                <table className="w-full text-sm text-left">
+                    <thead>
+                        <tr className="text-gray-600 border-b">
+                            <th className="py-2">Fecha</th>
+                            <th>Hora inicio</th>
+                            <th>Hora fin</th>
+                            <th>Actividad</th>
+                            <th>Aula</th>
+                            <th>Horas efectivas</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pendientes.length > 0 ? (
+                            pendientes.map(reg => (
+                                <tr key={reg.id} className="border-b hover:bg-gray-50">
+                                    <td className="py-2">{reg.fecha}</td>
+                                    <td>{reg.horaInicio}</td>
+                                    <td>{reg.horaFin}</td>
+                                    <td>{reg.actividad}</td>
+                                    <td>{reg.aula}</td>
+                                    <td>{reg.horasEfectivas}</td>
+                                    <td className="flex gap-2">
+                                        <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
                                             <Edit2 size={16} />
                                         </button>
-                                        <button onClick={() => handleDelete(u.id)} className="text-red-600">
+                                        <button onClick={() => handleDelete(reg.id)} className="text-red-600 hover:underline">
                                             <Trash2 size={16} />
                                         </button>
                                     </td>
                                 </tr>
-                            ))}
-                            {usuarios.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
-                                        No hay usuarios.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={7} className="py-4 text-center text-gray-500">
+                                    No tienes registros pendientes.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
+            {/* Modal de nuevo/editar registro */}
             <Dialog
                 open={modalOpen}
-                onClose={() => setModalOpen(false)}
+                onClose={() => { setModalOpen(false); setEditing(null); }}
                 className="fixed inset-0 z-50 flex items-center justify-center"
             >
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
                     <Dialog.Title className="text-lg font-semibold mb-4">
-                        {editing ? 'Editar usuario' : 'Nuevo usuario'}
+                        {editing ? 'Editar registro' : 'Nuevo registro'}
                     </Dialog.Title>
-                    <form onSubmit={e => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
+                    <form
+                        onSubmit={e => { e.preventDefault(); handleSubmit(); }}
+                        className="space-y-4"
+                    >
+                        <input
+                            type="date"
+                            className="w-full border rounded px-3 py-2"
+                            value={form.fecha}
+                            onChange={e => setForm(prev => ({ ...prev, fecha: e.target.value }))}
+                            required
+                        />
+                        <div className="flex gap-2">
+                            <input
+                                type="time"
+                                className="w-1/2 border rounded px-3 py-2"
+                                value={form.horaInicio}
+                                onChange={e => setForm(prev => ({ ...prev, horaInicio: e.target.value }))}
+                                required
+                            />
+                            <input
+                                type="time"
+                                className="w-1/2 border rounded px-3 py-2"
+                                value={form.horaFin}
+                                onChange={e => setForm(prev => ({ ...prev, horaFin: e.target.value }))}
+                                required
+                            />
+                        </div>
                         <input
                             type="text"
-                            placeholder="Nombre"
-                            value={form.nombre}
-                            onChange={e => setForm({ ...form, nombre: e.target.value })}
+                            placeholder="Actividad realizada"
                             className="w-full border rounded px-3 py-2"
+                            value={form.actividad}
+                            onChange={e => setForm(prev => ({ ...prev, actividad: e.target.value }))}
                             required
                         />
                         <input
                             type="text"
-                            placeholder="Apellido"
-                            value={form.apellido}
-                            onChange={e => setForm({ ...form, apellido: e.target.value })}
+                            placeholder="Aula"
                             className="w-full border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="email"
-                            placeholder="Email"
-                            value={form.email}
-                            onChange={e => setForm({ ...form, email: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="password"
-                            placeholder="Contraseña"
-                            value={formPass}
-                            onChange={e => setFormPass(e.target.value)}
-                            className="w-full border rounded px-3 py-2"
-                            required
-                        />
-                        <select
-                            value={form.rol}
-                            onChange={e => setForm({ ...form, rol: e.target.value as Role })}
-                            className="w-full border rounded px-3 py-2"
-                        >
-                            <option value="ESTUDIANTE">Estudiante</option>
-                            <option value="INSTRUCTOR_SOCIAL">Instructor Social</option>
-                            <option value="INSTRUCTOR_REMUNERADO">Instructor Remunerado</option>
-                        </select>
-
-                        {/* Selección de materia */}
-                        <select
-                            value={selectedMateria}
-                            onChange={e => setSelectedMateria(e.target.value)}
-                            className="w-full border rounded px-3 py-2"
-                            required={!editing}
-                        >
-                            <option value="" disabled>Selecciona una materia</option>
-                            {materias.map(m => (
-                                <option key={m.id} value={m.id}>{m.nombre}</option>
-                            ))}
-                        </select>
-
-                        <input
-                            type="text"
-                            placeholder="Código de usuario"
-                            value={form.codigoUsuario}
-                            onChange={e => setForm({ ...form, codigoUsuario: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
+                            value={form.aula}
+                            onChange={e => setForm(prev => ({ ...prev, aula: e.target.value }))}
                             required
                         />
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => setModalOpen(false)}
+                                onClick={() => { setModalOpen(false); setEditing(null); }}
                                 className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
                             >
                                 Cancelar
@@ -250,7 +267,7 @@ const DashboardEncargado: React.FC = () => {
                                 type="submit"
                                 className="px-4 py-2 rounded bg-[#003c71] text-white hover:bg-[#002f59]"
                             >
-                                {editing ? 'Guardar cambios' : 'Crear usuario'}
+                                Guardar
                             </button>
                         </div>
                     </form>
@@ -260,4 +277,4 @@ const DashboardEncargado: React.FC = () => {
     );
 };
 
-export default DashboardEncargado;
+export default DashboardEstudiante;

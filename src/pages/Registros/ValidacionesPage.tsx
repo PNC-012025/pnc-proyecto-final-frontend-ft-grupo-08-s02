@@ -2,71 +2,93 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
 import useAuth from '../../hooks/useAuth';
-import type { RegistroHora, Usuario } from '../../types';
+import type { Usuario } from '../../types';
+
+type RegistroLocal = {
+    id: string;
+    fecha: string;
+    horaInicio: string;
+    horaFin: string;
+    actividad: string;
+    aula: string;
+    horasEfectivas: number;
+    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+    estudianteId: string;
+};
 
 const ValidacionesPage: React.FC = () => {
     const { user } = useAuth();
-    // Cargar todos los registros
-    const [registros, setRegistros] = useState<RegistroHora[]>([]);
-    // Cargar lista de usuarios para obtener nombres
+
+    // todos los registros
+    const [registros, setRegistros] = useState<RegistroLocal[]>([]);
+    // lista de usuarios para buscar código
     const [usuarios, setUsuarios] = useState<Usuario[]>(() =>
         JSON.parse(localStorage.getItem('usuarios') || '[]')
     );
-    const [filterEstudiante, setFilterEstudiante] = useState<string>('all');
+    const [filterCodigo, setFilterCodigo] = useState<string>('all');
 
     useEffect(() => {
         const data = localStorage.getItem('registros');
-        if (data) {
-            setRegistros(JSON.parse(data));
-        }
+        if (data) setRegistros(JSON.parse(data));
     }, []);
 
-    // Obtiene nombre completo de un usuario por su id
-    const getNombreEstudiante = (id: string) => {
-        const u = usuarios.find(u => u.id === id);
-        return u ? `${u.nombre} ${u.apellido}` : id;
+    // dada una fila, devuelve el códigoUsuario del alumno (o el id si no existe)
+    const getCodigoEstudiante = (r: RegistroLocal) => {
+        const u = usuarios.find(u => u.id === r.estudianteId);
+        return u ? u.codigoUsuario : r.estudianteId;
     };
 
-    // IDs únicos de estudiantes con registros
-    const estudiantesUnicos = Array.from(new Set(registros.map(r => r.estudianteId)));
+    // lista única de códigos para el dropdown
+    const codigosUnicos = Array.from(
+        new Set(registros.map(getCodigoEstudiante))
+    );
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setFilterEstudiante(e.target.value);
+        setFilterCodigo(e.target.value);
     };
 
-    const actualizarEstado = (id: number, nuevoEstado: 'APROBADO' | 'RECHAZADO') => {
+    // actualizar estado en localStorage
+    const actualizarEstado = (
+        registroId: string,
+        nuevoEstado: 'APROBADO' | 'RECHAZADO'
+    ) => {
         const nuevos = registros.map(r =>
-            r.id === id ? { ...r, estado: nuevoEstado } : r
+            r.id === registroId ? { ...r, estado: nuevoEstado } : r
         );
         setRegistros(nuevos);
         localStorage.setItem('registros', JSON.stringify(nuevos));
     };
 
-    // Filtrar solo pendientes y por estudiante seleccionado
-    const registrosFiltrados = registros.filter(r =>
-        r.estado === 'PENDIENTE' &&
-        (filterEstudiante === 'all' || r.estudianteId === filterEstudiante)
-    );
+    // filtrar por pendiente y por códigoUsuario
+    const registrosFiltrados = registros.filter(r => {
+        const code = getCodigoEstudiante(r);
+        return (
+            r.estado === 'PENDIENTE' &&
+            (filterCodigo === 'all' || code === filterCodigo)
+        );
+    });
 
     return (
         <div className="space-y-6 p-4">
-            <h2 className="text-2xl font-bold text-[#003c71]">Validaciones de Registros</h2>
+            <h2 className="text-2xl font-bold text-[#003c71]">
+                Validaciones de Registros
+            </h2>
 
-            {/* Selector de estudiante */}
+            {/* Filtrar por código de usuario */}
             <div className="flex items-center gap-4">
-                <label htmlFor="estudianteSelect" className="font-medium">
-                    Filtrar por estudiante:
+                <label htmlFor="codigoSelect" className="font-medium">
+                    Filtrar por código:
                 </label>
                 <select
-                    id="estudianteSelect"
-                    value={filterEstudiante}
+                    id="codigoSelect"
+                    value={filterCodigo}
                     onChange={handleFilterChange}
                     className="border rounded px-3 py-1"
                 >
                     <option value="all">Todos</option>
-                    {estudiantesUnicos.map(id => (
-                        <option key={id} value={id}>
-                            {getNombreEstudiante(id)}
+                    {codigosUnicos.map(c => (
+                        <option key={c} value={c}>
+                            {c}
                         </option>
                     ))}
                 </select>
@@ -77,7 +99,7 @@ const ValidacionesPage: React.FC = () => {
                 <table className="min-w-full bg-white rounded shadow">
                     <thead>
                         <tr className="bg-gray-100 text-gray-700 text-left">
-                            <th className="px-4 py-2">Estudiante</th>
+                            <th className="px-4 py-2">Código</th>
                             <th className="px-4 py-2">Fecha</th>
                             <th className="px-4 py-2">Hora Inicio</th>
                             <th className="px-4 py-2">Hora Fin</th>
@@ -88,25 +110,25 @@ const ValidacionesPage: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {registrosFiltrados.map(reg => (
-                            <tr key={reg.id} className="border-b hover:bg-gray-50">
-                                <td className="px-4 py-2">{getNombreEstudiante(reg.estudianteId)}</td>
-                                <td className="px-4 py-2">{reg.fecha}</td>
-                                <td className="px-4 py-2">{reg.horaInicio}</td>
-                                <td className="px-4 py-2">{reg.horaFin}</td>
-                                <td className="px-4 py-2">{reg.actividad}</td>
-                                <td className="px-4 py-2">{reg.aula}</td>
-                                <td className="px-4 py-2">{reg.horasEfectivas}</td>
+                        {registrosFiltrados.map(r => (
+                            <tr key={r.id} className="border-b hover:bg-gray-50">
+                                <td className="px-4 py-2">{getCodigoEstudiante(r)}</td>
+                                <td className="px-4 py-2">{r.fecha}</td>
+                                <td className="px-4 py-2">{r.horaInicio}</td>
+                                <td className="px-4 py-2">{r.horaFin}</td>
+                                <td className="px-4 py-2">{r.actividad}</td>
+                                <td className="px-4 py-2">{r.aula}</td>
+                                <td className="px-4 py-2">{r.horasEfectivas}</td>
                                 <td className="px-4 py-2 space-x-2">
                                     <button
                                         className="text-green-600 hover:text-green-800"
-                                        onClick={() => actualizarEstado(reg.id, 'APROBADO')}
+                                        onClick={() => actualizarEstado(r.id, 'APROBADO')}
                                     >
                                         <CheckCircle size={18} />
                                     </button>
                                     <button
                                         className="text-red-600 hover:text-red-800"
-                                        onClick={() => actualizarEstado(reg.id, 'RECHAZADO')}
+                                        onClick={() => actualizarEstado(r.id, 'RECHAZADO')}
                                     >
                                         <XCircle size={18} />
                                     </button>
