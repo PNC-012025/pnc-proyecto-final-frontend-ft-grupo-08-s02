@@ -69,17 +69,6 @@ const Sidebar: React.FC = () => {
                     );
                 })}
             </nav>
-
-            {/* Logout */}
-            <div className="p-4">
-                <button
-                    onClick={logout}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 rounded-md hover:bg-red-50 transition"
-                >
-                    <LogOut size={18} />
-                    Cerrar sesión
-                </button>
-            </div>
         </aside>
     );
 };
