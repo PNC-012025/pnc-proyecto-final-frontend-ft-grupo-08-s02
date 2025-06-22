@@ -152,22 +152,6 @@ const Login: React.FC = () => {
                             />
                         </div>
 
-                        {/* Recordar + Olvidaste contraseña */}
-                        <div className="flex items-center justify-between text-sm">
-                            <label className="flex items-center space-x-2 text-gray-600">
-                                <input
-                                    type="checkbox"
-                                    name="remember"
-                                    checked={values.remember}
-                                    onChange={handleChange}
-                                    className="h-4 w-4 text-[#003c71] border-gray-300 rounded focus:ring-[#003c71]"
-                                />
-                                <span>Recordarme</span>
-                            </label>
-                            <Link to="/forgot-password" className="text-[#003c71] hover:underline">
-                                ¿Olvidaste tu contraseña?
-                            </Link>
-                        </div>
 
                         {/* Submit */}
                         <button
