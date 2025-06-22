@@ -223,7 +223,7 @@ const DashboardEncargado: React.FC = () => {
         <div className="space-y-6 p-4">
             {/* Header */}
             <header className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[#003c71]">Bienvenido, {user?.nombre}</h1>
+                <h1 className="text-2xl font-bold text-[#003c71]">Panel administrativo</h1>
             </header>
 
             {/* Usuarios */}

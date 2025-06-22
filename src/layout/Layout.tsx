@@ -1,19 +1,37 @@
-import React from 'react';
+import React, { useState, createContext } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { Outlet } from 'react-router-dom';
 
+interface LayoutContextProps {
+  collapsed: boolean;
+  toggleSidebar: () => void;
+}
+
+export const LayoutContext = createContext<LayoutContextProps>({
+  collapsed: false,
+  toggleSidebar: () => { },
+});
+
 const Layout: React.FC = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const toggleSidebar = () => setCollapsed(c => !c);
+
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
+    <LayoutContext.Provider value={{ collapsed, toggleSidebar }}>
+      <div className="flex flex-col h-screen">
+        {/* 1) Header a ancho completo */}
         <Header />
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
+
+        {/* 2) Debajo del header, sidebar + contenido */}
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar />
+          <main className="flex-1 overflow-auto p-6 bg-gray-100">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </LayoutContext.Provider>
   );
 };
 
