@@ -76,7 +76,7 @@ const Header: React.FC = () => {
                 {/* Notificaciones */}
                 <div className="relative" ref={notifRef}>
                     <button onClick={() => setShowNotif(v => !v)} className="relative p-2 hover:bg-white/20 rounded-full transition">
-                        <Bell size={20} />
+                        <Bell size={24} />
                         {filteredNotifications.length > 0 && (
                             <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold text-white bg-red-600 rounded-full">
                                 {filteredNotifications.length}
