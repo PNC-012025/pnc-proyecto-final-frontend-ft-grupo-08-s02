@@ -208,3 +208,5 @@ const RegistroPageEncargado: React.FC = () => {
 };
 
 export default RegistroPageEncargado;
+
+
