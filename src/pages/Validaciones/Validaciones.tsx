@@ -13,6 +13,7 @@ type RegistroLocal = {
     horasEfectivas: number;
     estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
     estudianteId: string;
+    materia?: string; 
 };
 
 type UsuarioConMateria = Usuario & { materiaId?: string };
@@ -22,7 +23,6 @@ const ITEMS_PER_PAGE = 15;
 const ValidacionesPage: React.FC = () => {
     const { user } = useAuth();
 
-    // Carga inicial
     const [registros, setRegistros] = useState<RegistroLocal[]>([]);
     const [usuarios] = useState<UsuarioConMateria[]>(() =>
         JSON.parse(localStorage.getItem('usuarios') || '[]')
@@ -31,46 +31,46 @@ const ValidacionesPage: React.FC = () => {
         JSON.parse(localStorage.getItem('materias') || '[]')
     );
 
-    // Buscador y paginación
-    const [searchCodigo, setSearchCodigo] = useState<string>('');
+    const [searchCodigo, setSearchCodigo] = useState('');
     const [page, setPage] = useState(1);
 
     useEffect(() => {
         const data = localStorage.getItem('registros');
-        if (data) {
-            setRegistros(JSON.parse(data) as RegistroLocal[]);
-        }
+        if (data) setRegistros(JSON.parse(data));
     }, []);
 
-    // Helpers para extraer datos del estudiante
     const getCodigoEstudiante = (r: RegistroLocal) => {
         const u = usuarios.find(u => u.id === r.estudianteId);
-        return u ? u.codigoUsuario : r.estudianteId;
+        return u?.codigoUsuario ?? r.estudianteId;
     };
+
     const getNombreEstudiante = (r: RegistroLocal) => {
         const u = usuarios.find(u => u.id === r.estudianteId);
         return u ? `${u.nombre} ${u.apellido}` : r.estudianteId;
     };
+
     const getMateriaEstudiante = (r: RegistroLocal) => {
+        if (r.materia) {
+            const m = materias.find(m => m.id === r.materia);
+            if (m) return m.nombre;
+        }
+        // fallback: materia asignada al usuario
         const u = usuarios.find(u => u.id === r.estudianteId);
-        if (!u || !u.materiaId) return '—';
-        const m = materias.find(m => m.id === u.materiaId);
-        return m ? m.nombre : '—';
+        if (u?.materiaId) {
+            const m = materias.find(m => m.id === u.materiaId);
+            if (m) return m.nombre;
+        }
+        return '—';
     };
 
-    // Aprobar/Rechazar
-    const actualizarEstado = (
-        registroId: string,
-        nuevoEstado: 'APROBADO' | 'RECHAZADO'
-    ) => {
+    const actualizarEstado = (registroId: string, nuevo: 'APROBADO' | 'RECHAZADO') => {
         const nuevos = registros.map(r =>
-            r.id === registroId ? { ...r, estado: nuevoEstado } : r
+            r.id === registroId ? { ...r, estado: nuevo } : r
         );
         setRegistros(nuevos);
         localStorage.setItem('registros', JSON.stringify(nuevos));
     };
 
-    // Filtrado de pendientes + búsqueda por código
     const registrosFiltrados = useMemo(() => {
         const term = searchCodigo.trim().toLowerCase();
         return registros.filter(r =>
@@ -79,52 +79,33 @@ const ValidacionesPage: React.FC = () => {
         );
     }, [registros, searchCodigo]);
 
-    // Paginación
-    const pageCount = Math.max(
-        1,
-        Math.ceil(registrosFiltrados.length / ITEMS_PER_PAGE)
-    );
+    const pageCount = Math.max(1, Math.ceil(registrosFiltrados.length / ITEMS_PER_PAGE));
     const paginated = useMemo(
-        () =>
-            registrosFiltrados.slice(
-                (page - 1) * ITEMS_PER_PAGE,
-                page * ITEMS_PER_PAGE
-            ),
+        () => registrosFiltrados.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE),
         [registrosFiltrados, page]
     );
 
     return (
         <div className="space-y-6 p-4">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-[#003c71]">
-                    Validaciones de Registros
-                </h2>
-                <span className="text-gray-600">
-                    Encargado: <strong>{user?.nombre}</strong>
-                </span>
+                <h2 className="text-2xl font-bold text-[#003c71]">Validaciones de Registros</h2>
+                <span className="text-gray-600">Encargado: <strong>{user?.nombre}</strong></span>
             </div>
 
-            {/* Buscador por código */}
             <div className="flex items-center gap-4">
-                <label htmlFor="searchCodigo" className="font-medium">
-                    Buscar por código:
-                </label>
+                <label htmlFor="searchCodigo" className="font-medium">Buscar por código:</label>
                 <input
                     id="searchCodigo"
                     type="text"
                     placeholder="Escribe el código..."
                     className="border rounded px-3 py-1"
                     value={searchCodigo}
-                    onChange={e => {
-                        setSearchCodigo(e.target.value);
-                        setPage(1);
-                    }}
+                    onChange={e => { setSearchCodigo(e.target.value); setPage(1); }}
                 />
             </div>
 
-            {/* Tabla de validaciones */}
             <div className="overflow-x-auto">
-                <table className="min-w-full bg-white rounded shadow">
+                <table className="min-w-full bg-white rounded shadow divide-y divide-gray-200">
                     <thead>
                         <tr className="bg-gray-100 text-gray-700 text-left">
                             <th className="px-4 py-2">Código</th>
@@ -139,9 +120,9 @@ const ValidacionesPage: React.FC = () => {
                             <th className="px-4 py-2">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-100">
                         {paginated.map(r => (
-                            <tr key={r.id} className="border-b hover:bg-gray-50">
+                            <tr key={r.id} className="hover:bg-gray-50">
                                 <td className="px-4 py-2">{getCodigoEstudiante(r)}</td>
                                 <td className="px-4 py-2">{getNombreEstudiante(r)}</td>
                                 <td className="px-4 py-2">{getMateriaEstudiante(r)}</td>
@@ -169,10 +150,7 @@ const ValidacionesPage: React.FC = () => {
                         ))}
                         {paginated.length === 0 && (
                             <tr>
-                                <td
-                                    colSpan={10}
-                                    className="px-4 py-2 text-center text-gray-500"
-                                >
+                                <td colSpan={10} className="px-4 py-2 text-center text-gray-500">
                                     No hay registros pendientes.
                                 </td>
                             </tr>
@@ -181,11 +159,8 @@ const ValidacionesPage: React.FC = () => {
                 </table>
             </div>
 
-            {/* Controles de paginación */}
             <div className="flex justify-between items-center mt-4">
-                <span>
-                    Página {page} de {pageCount}
-                </span>
+                <span>Página {page} de {pageCount}</span>
                 <div className="flex gap-2">
                     <button
                         onClick={() => setPage(p => Math.max(1, p - 1))}

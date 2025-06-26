@@ -1,14 +1,19 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import { Book, UserCheck, Clock, LogOut } from 'lucide-react';
+import { LayoutContext } from './Layout';
+import ucaBg from '../assets/sidebar/uca.png';
 
 const Sidebar: React.FC = () => {
     const { user, logout } = useAuth();
-    const location = useLocation();
+    const { pathname } = useLocation();
+    const { collapsed } = useContext(LayoutContext);
 
     const isActive = (path: string) =>
-        location.pathname.startsWith(path);
+        path === '/dashboard'
+            ? pathname === '/dashboard'
+            : pathname.startsWith(path);
 
     const links = user?.rol === 'ENCARGADO'
         ? [
@@ -22,38 +27,48 @@ const Sidebar: React.FC = () => {
         ];
 
     return (
-        <aside className="w-64 bg-white shadow h-full flex flex-col">
-            <div className="p-4 border-b">
-                <h1 className="text-lg font-bold text-[#003c71]">REHOSAR</h1>
-                <p className="text-sm text-gray-500">{user?.nombre}</p>
-                <p className="text-xs text-gray-400">{user?.email}</p>
+        <aside
+            className={`
+                bg-white h-full flex flex-col shadow-lg transition-all duration-300
+                ${collapsed ? 'w-0 opacity-0 overflow-hidden' : 'w-64'}
+            `}
+        >
+            {/* Perfil con bg + degradado */}
+            <div
+                className="relative h-40 bg-cover bg-center"
+                style={{ backgroundImage: `url(${ucaBg})` }}
+            >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute bottom-3 left-4 text-white">
+                    <p className="font-bold">{user?.nombre}</p>
+                    <p className="text-xs flex items-center gap-1">
+                        <span className="material-icons text-sm">Email: </span>
+                        {user?.email}
+                    </p>
+                </div>
             </div>
 
-            <nav className="flex-1 p-4 space-y-2">
-                {links.map(link => (
-                    <Link
-                        key={link.to}
-                        to={link.to}
-                        className={`flex items-center gap-2 p-2 rounded-md text-sm font-medium transition hover:bg-[#003c71]/10 ${
-                            isActive(link.to)
-                                ? 'bg-[#003c71] text-white'
-                                : 'text-gray-700'
-                        }`}
-                    >
-                        {link.icon}
-                        {link.label}
-                    </Link>
-                ))}
+            {/* Navegación */}
+            <nav className="flex-1 mt-4">
+                {links.map(({ to, label, icon }) => {
+                    const active = isActive(to);
+                    return (
+                        <Link
+                            key={to}
+                            to={to}
+                            className={`
+                                flex items-center gap-3 px-5 py-3 text-base font-medium transition
+                                ${active
+                                    ? 'bg-white text-[rgb(0,60,113)] border-l-4 border-[rgb(0,60,113)]'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-[rgb(0,60,113)]'}
+                            `}
+                        >
+                            {icon}
+                            {label}
+                        </Link>
+                    );
+                })}
             </nav>
-
-            <div className="p-4 border-t">
-                <button
-                    onClick={logout}
-                    className="flex items-center gap-2 text-sm text-red-600 hover:underline"
-                >
-                    <LogOut size={18} /> Cerrar sesión
-                </button>
-            </div>
         </aside>
     );
 };
