@@ -167,7 +167,7 @@ const DashboardEncargado: React.FC = () => {
             setPasswords(p => ({ ...p, [userForm.email]: userPass }));
         }
 
-        // Persistir relación usuario↔materia en LS
+        // Persistir relación usuario↔materia en localStorage
         const rawP = localStorage.getItem('usuarioXmateria') || '[]';
         let puente = JSON.parse(rawP) as PuenteLS[];
         // Eliminar asignaciones previas para este usuario
@@ -177,7 +177,6 @@ const DashboardEncargado: React.FC = () => {
             puente.push({ id_usuario: userForm.codigoUsuario, id_materia: mid })
         );
         localStorage.setItem('usuarioXmateria', JSON.stringify(puente));
-        // Disparar evento para que DashboardEstudiante recargue materias
         window.dispatchEvent(new Event('usuarioXmateriaChanged'));
 
         setUsuarios(updatedUsers);
