@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+// src/pages/Registros/RegistrosPage.tsx
+import React, { useEffect, useRef, useState } from 'react';
 import useAuth from '../../hooks/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+/* ───────── tipos que existen en localStorage ───────── */
 interface RegistroHora {
   id: number;
   fecha: string;
@@ -13,19 +15,29 @@ interface RegistroHora {
   horasEfectivas: number;
   estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
   estudianteId: string;
+  materia?: string;
 }
 
+interface MateriaLS  { id_materia: string; nombre_materia: string }
+interface PuenteLS   { id_usuario: string; id_materia: string }
+
+/* ───────── componente ───────── */
 const RegistrosPage: React.FC = () => {
-  const { user } = useAuth();
-  const userId = user?.id ?? '';
+  const { user } = useAuth();                    // user = { codigoUsuario, rol, … }
+  const userId = (user as any)?.codigoUsuario ?? user?.id ?? '';
 
-  /* ─── NUEVO: detecta cualquier rol que empiece por INSTRUCTOR_ ─── */
-  const isInstructor = user?.rol?.startsWith('INSTRUCTOR_') ?? false;
+  /* ✅  Instructores =  rol sea  ESTUDIANTE   o  INSTRUCTOR_REMUNERADO */
+  const isInstructor = /(?:ESTUDIANTE|INSTRUCTOR_REMUNERADO)/i.test(user?.rol ?? '');
 
-  const [registros, setRegistros] = useState<RegistroHora[]>([]);
+  /* materias y materia seleccionada */
+  const [materias, setMaterias]     = useState<string[]>([]);
+  const [materiaSel, setMateriaSel] = useState<string>('');
+
+  /* registros aprobados filtrados */
+  const [registros, setRegistros]   = useState<RegistroHora[]>([]);
+
   const printableRef = useRef<HTMLDivElement>(null);
 
-  /* Formulario visible para instructores */
   const [info, setInfo] = useState({
     nombre: user?.nombre || '',
     carrera: '',
@@ -36,159 +48,152 @@ const RegistrosPage: React.FC = () => {
     inicio: '',
   });
 
+  /* ── 1. obtener materias (puente + catálogo) ── */
   useEffect(() => {
-    const data = localStorage.getItem('registros');
-    if (data) {
-      const all = JSON.parse(data) as RegistroHora[];
-      setRegistros(
-        all.filter(
-          (r) => r.estudianteId === userId && r.estado === 'APROBADO'
-        )
-      );
-    }
-  }, [userId]);
+    if (!isInstructor) return;
 
-  const handleDownloadPdf = async () => {
+    const rawP = localStorage.getItem('usuarioXmateria');
+    const rawM = localStorage.getItem('materias');
+    if (!rawP || !rawM) return;
+
+    const puente  = JSON.parse(rawP) as PuenteLS[];
+    const catalog = JSON.parse(rawM) as MateriaLS[];
+
+    const ids = puente.filter(p => p.id_usuario === userId).map(p => p.id_materia);
+    const noms = catalog.filter(m => ids.includes(m.id_materia)).map(m => m.nombre_materia);
+
+    setMaterias(noms);
+    setMateriaSel(noms[0] ?? '');
+  }, [isInstructor, userId]);
+
+  /* ── 2. carga de registros ── */
+  useEffect(() => {
+    const raw = localStorage.getItem('registros');
+    if (!raw) { setRegistros([]); return; }
+
+    const all = JSON.parse(raw) as RegistroHora[];
+    setRegistros(
+      all.filter(r =>
+        r.estudianteId === userId &&
+        r.estado === 'APROBADO' &&
+        (!materiaSel || r.materia === materiaSel)
+      )
+    );
+  }, [userId, materiaSel]);
+
+  /* ── 3. PDF ── */
+  const downloadPdf = async () => {
     if (!printableRef.current) return;
     const canvas = await html2canvas(printableRef.current);
-    const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('l', 'pt', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(
-      `asistencia_${userId}_${new Date().toISOString().slice(0, 10)}.pdf`
-    );
+    const w   = pdf.internal.pageSize.getWidth();
+    const h   = (canvas.height * w) / canvas.width;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, h);
+    const slug = (materiaSel || 'general').replace(/\s+/g, '_');
+    pdf.save(`asistencia_${slug}_${userId}_${Date.now()}.pdf`);
   };
 
+  /* ── UI ── */
   return (
     <div className="space-y-6 p-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-[rgb(0,60,113)]">
-          Mis registros aprobados
-        </h2>
-        <button
-          onClick={handleDownloadPdf}
-          className="bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]"
-        >
-          Descargar PDF
-        </button>
-      </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div className="flex items-center gap-4">
+    <h2 className="text-2xl font-bold text-[rgb(0,60,113)]">
+      Mis registros aprobados
+    </h2>
 
-      {/* Formulario para cualquier instructor (social o remunerado) */}
+    {isInstructor && (
+      <div className="flex items-center gap-2">
+        <span className="font-medium">Materia:</span>
+
+        {/* 1️⃣  selector cuando haya ≥1 materia */}
+        {materias.length ? (
+          <select
+            value={materiaSel}
+            onChange={e => setMateriaSel(e.target.value)}
+            className="border px-2 py-1 rounded"
+            disabled={materias.length === 1}   // opcional: bloquea si sólo hay una
+          >
+            {materias.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        ) : (
+          /* 2️⃣ placeholder cuando no hay materias */
+          <span className="italic text-gray-500">— sin materias —</span>
+        )}
+      </div>
+    )}
+  </div>
+
+  <button
+    onClick={downloadPdf}
+    className="self-start md:self-auto bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]"
+  >
+    Descargar PDF
+  </button>
+</div>
+
+      {/* formulario para instructores */}
       {isInstructor && (
         <div className="bg-white p-4 rounded shadow-md space-y-4">
-          <h3 className="font-semibold text-[rgb(0,60,113)]">
-            Información para Control de Asistencia
-          </h3>
+          <h3 className="font-semibold text-[rgb(0,60,113)]">Información para Control de Asistencia</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="text"
-              placeholder="Carrera"
-              value={info.carrera}
-              onChange={(e) => setInfo({ ...info, carrera: e.target.value })}
-              className="border rounded px-3 py-2 w-full"
-            />
-            <input
-              type="text"
-              placeholder="Número de Carné"
-              value={info.carnet}
-              onChange={(e) => setInfo({ ...info, carnet: e.target.value })}
-              className="border rounded px-3 py-2 w-full"
-            />
-            <input
-              type="tel"
-              placeholder="Número de teléfono"
-              value={info.telefono}
-              onChange={(e) => setInfo({ ...info, telefono: e.target.value })}
-              className="border rounded px-3 py-2 w-full"
-            />
-            <input
-              type="text"
-              placeholder="Nombre del proyecto o actividad"
-              value={info.proyecto}
-              onChange={(e) => setInfo({ ...info, proyecto: e.target.value })}
-              className="border rounded px-3 py-2 w-full"
-            />
-            <input
-              type="text"
-              placeholder="Responsable de la unidad o institución"
-              value={info.institucion}
-              onChange={(e) =>
-                setInfo({ ...info, institucion: e.target.value })
-              }
-              className="border rounded px-3 py-2 w-full"
-            />
-            <input
-              type="date"
-              placeholder="Fecha de inicio"
-              value={info.inicio}
-              onChange={(e) => setInfo({ ...info, inicio: e.target.value })}
-              className="border rounded px-3 py-2 w-full"
-            />
+            {(['Carrera','Número de Carné','Número de teléfono','Nombre del proyecto o actividad',
+               'Responsable de la unidad o institución','Fecha de inicio'] as const).map((ph, idx) => {
+              const key = ['carrera','carnet','telefono','proyecto','institucion','inicio'][idx] as keyof typeof info;
+              return (
+                <input
+                  key={key}
+                  type={key === 'inicio' ? 'date' : key === 'telefono' ? 'tel' : 'text'}
+                  placeholder={ph}
+                  value={info[key]}
+                  onChange={e => setInfo({ ...info, [key]: e.target.value })}
+                  className="border rounded px-3 py-2 w-full"
+                />
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Área imprimible */}
-      <div
-        ref={printableRef}
-        className="bg-white p-4 rounded shadow-md space-y-4"
-      >
+      {/* zona imprimible */}
+      <div ref={printableRef} className="bg-white p-4 rounded shadow-md space-y-4">
         {isInstructor && (
           <div className="text-sm space-y-1">
-            <div>
-              <strong>Nombre del estudiante:</strong> {info.nombre}
-            </div>
-            <div>
-              <strong>Carrera:</strong> {info.carrera}{' '}
-              <strong>Carné:</strong> {info.carnet}
-            </div>
-            <div>
-              <strong>Teléfono:</strong> {info.telefono}
-            </div>
-            <div>
-              <strong>Proyecto/Actividad:</strong> {info.proyecto}
-            </div>
-            <div>
-              <strong>Responsable:</strong> {info.institucion}
-            </div>
-            <div>
-              <strong>Fecha inicio:</strong> {info.inicio}
-            </div>
+            <div><strong>Nombre del estudiante:</strong> {info.nombre}</div>
+            <div><strong>Carrera:</strong> {info.carrera} <strong>Carné:</strong> {info.carnet}</div>
+            <div><strong>Teléfono:</strong> {info.telefono}</div>
+            <div><strong>Proyecto/Actividad:</strong> {info.proyecto}</div>
+            <div><strong>Responsable:</strong> {info.institucion}</div>
+            <div><strong>Fecha inicio:</strong> {info.inicio}</div>
+            <div><strong>Materia:</strong> {materiaSel || '—'}</div>
           </div>
         )}
 
+        {/* tabla */}
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded shadow">
             <thead>
               <tr className="bg-gray-100 text-gray-700 text-left">
-                <th className="px-4 py-2">Fecha</th>
-                <th className="px-4 py-2">Hora inicio</th>
-                <th className="px-4 py-2">Hora fin</th>
-                <th className="px-4 py-2">Actividad</th>
-                <th className="px-4 py-2">Aula</th>
-                <th className="px-4 py-2">Horas efectivas</th>
+                {['Fecha','Hora inicio','Hora fin','Actividad','Aula','Horas efectivas'].map(c => (
+                  <th key={c} className="px-4 py-2">{c}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {registros.length > 0 ? (
-                registros.map((reg) => (
-                  <tr key={reg.id} className="border-b">
-                    <td className="px-4 py-2">{reg.fecha}</td>
-                    <td className="px-4 py-2">{reg.horaInicio}</td>
-                    <td className="px-4 py-2">{reg.horaFin}</td>
-                    <td className="px-4 py-2">{reg.actividad}</td>
-                    <td className="px-4 py-2">{reg.aula}</td>
-                    <td className="px-4 py-2">{reg.horasEfectivas}</td>
-                  </tr>
-                ))
-              ) : (
+              {registros.length ? registros.map(r => (
+                <tr key={r.id} className="border-b">
+                  <td className="px-4 py-2">{r.fecha}</td>
+                  <td className="px-4 py-2">{r.horaInicio}</td>
+                  <td className="px-4 py-2">{r.horaFin}</td>
+                  <td className="px-4 py-2">{r.actividad}</td>
+                  <td className="px-4 py-2">{r.aula}</td>
+                  <td className="px-4 py-2">{r.horasEfectivas}</td>
+                </tr>
+              )) : (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-2 text-center text-gray-500"
-                  >
+                  <td colSpan={6} className="px-4 py-2 text-center text-gray-500">
                     No hay registros aprobados.
                   </td>
                 </tr>
