@@ -25,11 +25,11 @@ const RegistrosPage: React.FC = () => {
   const canFilter = /(?:INSTRUCTOR_SOCIAL|INSTRUCTOR_REMUNERADO)/i.test(user?.rol ?? '');
 
   /* materias y materia seleccionada */
-  const [materias, setMaterias] = useState<CatMateria[]>([]);
+  const [materias, setMaterias]     = useState<CatMateria[]>([]);
   const [materiaSel, setMateriaSel] = useState<string>('');
 
   /* registros aprobados filtrados */
-  const [registros, setRegistros] = useState<RegistroHora[]>([]);
+  const [registros, setRegistros]   = useState<RegistroHora[]>([]);
 
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -44,20 +44,20 @@ const RegistrosPage: React.FC = () => {
     inicio: '',
   });
 
-  /* ── Se obtienen materias ── */
+  /* ── obtener materias asignadas ── */
   useEffect(() => {
     if (!canFilter) return;
     const rawP = localStorage.getItem('usuarioXmateria');
     const rawM = localStorage.getItem('materias');
     if (!rawP || !rawM) return;
-    const puente = JSON.parse(rawP) as PuenteLS[];
+    const puente  = JSON.parse(rawP) as PuenteLS[];
     const catalog = JSON.parse(rawM) as CatMateria[];
     const ids = puente.filter(p => p.id_usuario === userId).map(p => p.id_materia);
     setMaterias(catalog.filter(m => ids.includes(m.id)));
     setMateriaSel(ids[0] || '');
   }, [canFilter, userId]);
 
-  /* ── Se cargan de registros ── */
+  /* ── cargar registros aprobados ── */
   useEffect(() => {
     const raw = localStorage.getItem('registros');
     if (!raw) { setRegistros([]); return; }
@@ -69,7 +69,7 @@ const RegistrosPage: React.FC = () => {
     ));
   }, [userId, materiaSel]);
 
-  /* ── Generacion de PDF ── */
+  /* ── Generar PDF con márgenes y alta resolución ── */
   const downloadPdf = async () => {
     if (!printableRef.current) return;
     const canvas = await html2canvas(printableRef.current, { scale: 2 } as any);
@@ -79,81 +79,84 @@ const RegistrosPage: React.FC = () => {
     const usableWidth = pageWidth - margin * 2;
     const height = (canvas.height * usableWidth) / canvas.width;
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, usableWidth, height);
-    const slug = (materiaSel || 'general').replace(/\s+/g, '_');
-    pdf.save(`Registro de asistencia_${info.carnet}_.pdf`);
+    pdf.save(`Registro_Asistencia_${info.carnet}_${Date.now()}.pdf`);
   };
 
   return (
-    <div className="space-y-6 p-4">
-      {/* Encabezado y filtro */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <h2 className="text-2xl font-bold text-[rgb(0,60,113)]">Mis registros aprobados</h2>
-        {canFilter && (
-          <select
-            value={materiaSel}
-            onChange={e => setMateriaSel(e.target.value)}
-            className="border px-2 py-1 rounded bg-white"
+    <div className="space-y-8 p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <h1 className="text-3xl font-bold text-[#003c71]">Mis Registros Aprobados</h1>
+        <div className="flex items-center gap-3">
+          {canFilter && (
+            <select
+              value={materiaSel}
+              onChange={e => setMateriaSel(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-2 bg-white"
+            >
+              <option value="">Todas las Materias</option>
+              {materias.map(m => (
+                <option key={m.id} value={m.id}>{m.nombre}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={downloadPdf}
+            className="bg-[#003c71] hover:bg-[#002f59] text-white px-4 py-2 rounded flex items-center shadow"
           >
-            <option value="">Todas las materias</option>
-            {materias.map(m => (
-              <option key={m.id} value={m.id}>{m.nombre}</option>
-            ))}
-          </select>
-        )}
-        <button
-          onClick={downloadPdf}
-          className="flex items-center gap-1 bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]"
-        >
-          Descargar PDF
-        </button>
-      </div>
+            Descargar PDF
+          </button>
+        </div>
+      </header>
 
-      {/* Formulario para instructores */}
+      {/* Formulario instructores */}
       {canFilter && (
-        <div className="bg-white p-4 rounded shadow space-y-4">
-          <h3 className="text-lg font-semibold text-[rgb(0,60,113)]">
-            Información para Control de Asistencia
-          </h3>
+        <section className="bg-white p-5 rounded-xl shadow space-y-4">
+          <h2 className="text-xl font-semibold text-[#003c71]">Información para Control de Asistencia</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { label: 'Carrera', value: info.carrera, readOnly: true },
-              { label: 'Carnet', value: info.carnet, readOnly: true },
-              { label: 'Teléfono', value: info.telefono, onChange: (v: string) => setInfo(i => ({ ...i, telefono: v })) },
-              { label: 'Nombre Proyecto', value: info.proyecto, onChange: (v: string) => setInfo(i => ({ ...i, proyecto: v })) },
-              { label: 'Responsable', value: info.institucion, onChange: (v: string) => setInfo(i => ({ ...i, institucion: v })) },
-              { label: 'Fecha inicio', value: info.inicio, type: 'date', onChange: (v: string) => setInfo(i => ({ ...i, inicio: v })) },
-            ].map(({ label, value, readOnly, onChange, type }) => (
-              <div key={label} className="flex flex-col">
+              ['Carrera',       info.carrera,      true],
+              ['Carnet',        info.carnet,       true],
+              ['Teléfono',      info.telefono,     false],
+              ['Proyecto',      info.proyecto,     false],
+              ['Responsable',   info.institucion,  false],
+              ['Fecha inicio',  info.inicio,       false, 'date'],
+            ].map(([label, val, ro, type], i) => (
+              <div key={i} className="flex flex-col">
                 <label className="text-sm font-medium">{label}</label>
                 <input
-                  type={type || 'text'}
-                  value={value}
-                  readOnly={!!readOnly}
-                  onChange={e => onChange && onChange(e.target.value)}
-                  className={`w-full border rounded px-3 py-2 ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''
-                    }`}
+                  type={(type as string) || 'text'}
+                  value={val as string}
+                  readOnly={ro as boolean}
+                  onChange={e => {
+                    const v = e.target.value;
+                    const key = ((['carrera','carnet','telefono','proyecto','institucion','inicio'][i]) as keyof typeof info);
+                    setInfo(info => ({ ...info, [key]: v }));
+                  }}
+                  className={`w-full border rounded px-3 py-2 ${
+                    ro ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Zona imprimible para PDF */}
+      {/* Zona imprimible */}
       <div
         ref={printableRef}
-        className="mx-auto bg-white rounded-lg shadow-lg border border-gray-300 overflow-hidden"
-        style={{ width: '90%', paddingBottom: '20px' }}
+        className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden"
       >
-        {/* Header gris con datos */}
-        <div className="bg-gray-100 px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1">
+        {/* Datos del Estudiante */}
+        <div className="bg-gray-100 px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
             <p><strong>Nombre:</strong> {info.nombre}</p>
             <p><strong>Carrera:</strong> {info.carrera}</p>
             <p><strong>Carnet:</strong> {info.carnet}</p>
             <p><strong>Teléfono:</strong> {info.telefono || '-'}</p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p><strong>Proyecto:</strong> {info.proyecto || '-'}</p>
             <p><strong>Responsable:</strong> {info.institucion || '-'}</p>
             <p><strong>Fecha inicio:</strong> {info.inicio || '-'}</p>
@@ -161,8 +164,8 @@ const RegistrosPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Tabla con cuadrícula*/}
-        <div className="px-6 pt-4">
+        {/* Tabla de Registros */}
+        <div className="p-6 overflow-x-auto">
           <table className="min-w-full border-collapse border border-gray-300">
             <thead>
               <tr className="bg-white">
@@ -177,7 +180,7 @@ const RegistrosPage: React.FC = () => {
                 ].map(col => (
                   <th
                     key={col}
-                    className="border border-gray-300 px-3 py-2 text-left text-sm font-semibold text-gray-700"
+                    className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700"
                   >
                     {col}
                   </th>
@@ -186,17 +189,18 @@ const RegistrosPage: React.FC = () => {
             </thead>
             <tbody>
               {registros.length ? registros.map(r => (
-                <tr key={r.id} className="bg-white">
-                  <td className="border border-gray-300 px-3 py-1 text-sm">{r.fecha}</td>
-                  <td className="border border-gray-300 px-3 py-1 text-sm">{r.horaInicio}</td>
-                  <td className="border border-gray-300 px-3 py-1 text-sm">{r.horaFin}</td>
-                  <td className="border border-gray-300 px-3 py-1 text-sm">{r.actividad}</td>
-                  <td className="border border-gray-300 px-3 py-1 text-sm">{r.aula}</td>
-                  <td className="border border-gray-300 px-3 py-1 text-sm">{r.horasEfectivas}</td>
+                <tr key={r.id} className="bg-white hover:bg-gray-50">
+                  <td className="border border-gray-300 px-4 py-2 text-sm">{r.fecha}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">{r.horaInicio}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">{r.horaFin}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">{r.actividad}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">{r.aula}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">{r.horasEfectivas}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-sm">________________</td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={7} className="border border-gray-300 px-3 py-4 text-center text-gray-500">
+                  <td colSpan={7} className="border border-gray-300 px-4 py-6 text-center text-gray-500">
                     No hay registros aprobados.
                   </td>
                 </tr>
