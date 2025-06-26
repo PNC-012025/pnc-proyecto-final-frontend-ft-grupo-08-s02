@@ -3,20 +3,19 @@ import { Plus, UserPlus, Edit2, Trash2 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
 import type { Usuario, Role, Materia } from '../../types';
-import { asociarUsuarioConMateria } from '../../services/usuarioMateriaService';
 
 type UsuarioConMaterias = Usuario & { materiaIds: string[] };
+interface PuenteLS { id_usuario: string; id_materia: string; }
+
 const ITEMS_PER_PAGE = 10;
 
 const DashboardEncargado: React.FC = () => {
     const { user, logout } = useAuth();
 
-    // Estados de búsqueda
+    // Estados de búsqueda y paginación
     const [searchUsuario, setSearchUsuario] = useState('');
     const [searchMateria, setSearchMateria] = useState('');
     const [searchMateriaModal, setSearchMateriaModal] = useState('');
-
-    // Estados de paginación
     const [userPage, setUserPage] = useState(1);
     const [matPage, setMatPage] = useState(1);
 
@@ -39,13 +38,13 @@ const DashboardEncargado: React.FC = () => {
         apellido: '',
         codigoUsuario: '',
         email: '',
-        rol: 'ESTUDIANTE' as Role,
+        rol: 'INSTRUCTOR_SOCIAL' as Role,
         materiaIds: [] as string[]
     });
     const [userPass, setUserPass] = useState('');
     const [userError, setUserError] = useState<string | null>(null);
 
-    // Materias
+    // Materias globales
     const [materias, setMaterias] = useState<Materia[]>(() =>
         JSON.parse(localStorage.getItem('materias') || '[]')
     );
@@ -56,6 +55,7 @@ const DashboardEncargado: React.FC = () => {
     const [matForm, setMatForm] = useState({ nombre: '' });
     const [matError, setMatError] = useState<string | null>(null);
 
+    // Persistencia en localStorage
     useEffect(() => {
         localStorage.setItem('usuarios', JSON.stringify(usuarios));
     }, [usuarios]);
@@ -106,32 +106,56 @@ const DashboardEncargado: React.FC = () => {
         matPage * ITEMS_PER_PAGE
     );
 
-    // Funciones: Usuarios
+    // Funciones para Usuarios
     const openNewUser = () => {
         setEditingUser(null);
-        setUserForm({ nombre: '', apellido: '', codigoUsuario: '', email: '', rol: 'ESTUDIANTE', materiaIds: [] });
+        setUserForm({
+            nombre: '',
+            apellido: '',
+            codigoUsuario: '',
+            email: '',
+            rol: 'INSTRUCTOR_SOCIAL',
+            materiaIds: []
+        });
         setUserPass('');
         setUserError(null);
         setSearchMateriaModal('');
         setModalUserOpen(true);
     };
+
     const openEditUser = (u: UsuarioConMaterias) => {
         setEditingUser(u);
-        setUserForm({ nombre: u.nombre, apellido: u.apellido, codigoUsuario: u.codigoUsuario, email: u.email, rol: u.rol, materiaIds: [...u.materiaIds] });
+        // Cargar materias asignadas desde localStorage
+        const puenteRaw = localStorage.getItem('usuarioXmateria') || '[]';
+        const puente = JSON.parse(puenteRaw) as PuenteLS[];
+        const assigned = puente
+            .filter(p => p.id_usuario === u.codigoUsuario)
+            .map(p => p.id_materia);
+        setUserForm({
+            nombre: u.nombre,
+            apellido: u.apellido,
+            codigoUsuario: u.codigoUsuario,
+            email: u.email,
+            rol: u.rol,
+            materiaIds: assigned
+        });
         setUserPass(passwords[u.email] || '');
         setUserError(null);
         setSearchMateriaModal('');
         setModalUserOpen(true);
     };
+
     const handleSubmitUser = () => {
         setUserError(null);
         const dup = usuarios.some(u =>
-            !editingUser && (u.email === userForm.email || u.codigoUsuario === userForm.codigoUsuario)
+            !editingUser &&
+            (u.email === userForm.email || u.codigoUsuario === userForm.codigoUsuario)
         );
         if (dup) {
             setUserError('Email o código ya registrado');
             return;
         }
+
         let updatedUsers: UsuarioConMaterias[];
         if (editingUser) {
             updatedUsers = usuarios.map(u =>
@@ -142,21 +166,47 @@ const DashboardEncargado: React.FC = () => {
             updatedUsers = [...usuarios, newUser];
             setPasswords(p => ({ ...p, [userForm.email]: userPass }));
         }
-        userForm.materiaIds.forEach(mid => asociarUsuarioConMateria(userForm.codigoUsuario, mid));
+
+        // Persistir relación usuario↔materia en localStorage
+        const rawP = localStorage.getItem('usuarioXmateria') || '[]';
+        let puente = JSON.parse(rawP) as PuenteLS[];
+        // Eliminar asignaciones previas para este usuario
+        puente = puente.filter(p => p.id_usuario !== userForm.codigoUsuario);
+        // Añadir nuevas asignaciones
+        userForm.materiaIds.forEach(mid =>
+            puente.push({ id_usuario: userForm.codigoUsuario, id_materia: mid })
+        );
+        localStorage.setItem('usuarioXmateria', JSON.stringify(puente));
+        window.dispatchEvent(new Event('usuarioXmateriaChanged'));
+
         setUsuarios(updatedUsers);
         setModalUserOpen(false);
     };
+
     const handleDeleteUser = (id: string) =>
         setUsuarios(prev => prev.filter(u => u.id !== id));
 
-    // Funciones: Materias
-    const openNewMat = () => { setEditingMat(null); setMatForm({ nombre: '' }); setMatError(null); setModalMatOpen(true); };
-    const openEditMat = (m: Materia) => { setEditingMat(m); setMatForm({ nombre: m.nombre }); setMatError(null); setModalMatOpen(true); };
+    // Funciones para Materias
+    const openNewMat = () => {
+        setEditingMat(null);
+        setMatForm({ nombre: '' });
+        setMatError(null);
+        setModalMatOpen(true);
+    };
+    const openEditMat = (m: Materia) => {
+        setEditingMat(m);
+        setMatForm({ nombre: m.nombre });
+        setMatError(null);
+        setModalMatOpen(true);
+    };
     const handleSubmitMat = () => {
         const dup = materias.some(
             x => !editingMat && x.nombre.trim().toLowerCase() === matForm.nombre.trim().toLowerCase()
         );
-        if (dup) { setMatError('Materia duplicada'); return; }
+        if (dup) {
+            setMatError('Materia duplicada');
+            return;
+        }
         if (editingMat) {
             setMaterias(prev =>
                 prev.map(x => (x.id === editingMat.id ? { ...x, nombre: matForm.nombre } : x))
@@ -173,14 +223,21 @@ const DashboardEncargado: React.FC = () => {
         <div className="space-y-6 p-4">
             {/* Header */}
             <header className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[rgb(0,60,113)]">Panel administrativo</h1>
+                <h1 className="text-2xl font-bold text-[rgb(0,60,113)]">
+                    Panel administrativo
+                </h1>
             </header>
 
             {/* Sección Usuarios */}
             <section className="bg-white rounded-xl shadow p-6">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-[rgb(0,60,113)]">Usuarios</h2>
-                    <button onClick={openNewUser} className="flex items-center gap-2 bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]">
+                    <h2 className="text-xl font-semibold text-[rgb(0,60,113)]">
+                        Usuarios
+                    </h2>
+                    <button
+                        onClick={openNewUser}
+                        className="flex items-center gap-2 bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]"
+                    >
                         <UserPlus size={16} /> Nuevo usuario
                     </button>
                 </div>
@@ -189,7 +246,10 @@ const DashboardEncargado: React.FC = () => {
                     placeholder="Buscar usuario..."
                     className="w-full border rounded px-3 py-2 mb-4"
                     value={searchUsuario}
-                    onChange={e => { setSearchUsuario(e.target.value); setUserPage(1); }}
+                    onChange={e => {
+                        setSearchUsuario(e.target.value);
+                        setUserPage(1);
+                    }}
                 />
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -210,24 +270,50 @@ const DashboardEncargado: React.FC = () => {
                                     <td className="px-3 py-2">{u.email}</td>
                                     <td className="px-3 py-2">{u.rol}</td>
                                     <td className="px-3 py-2">{u.codigoUsuario}</td>
-                                    <td className="px-3 py-2">{u.materiaIds.map(id => materias.find(m => m.id === id)?.nombre).join(', ')}</td>
+                                    <td className="px-3 py-2">
+                                        {u.materiaIds
+                                            .map(id => materias.find(m => m.id === id)?.nombre)
+                                            .join(', ')}
+                                    </td>
                                     <td className="px-3 py-2 flex gap-2">
-                                        <button onClick={() => openEditUser(u)} className="text-blue-600"><Edit2 size={16} /></button>
-                                        <button onClick={() => handleDeleteUser(u.id)} className="text-red-600"><Trash2 size={16} /></button>
+                                        <button onClick={() => openEditUser(u)} className="text-blue-600">
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDeleteUser(u.id)} className="text-red-600">
+                                            <Trash2 size={16} />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
                             {paginatedUsuarios.length === 0 && (
-                                <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-500">No se encontraron usuarios.</td></tr>
+                                <tr>
+                                    <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
+                                        No se encontraron usuarios.
+                                    </td>
+                                </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
                 <div className="flex justify-between items-center mt-4">
-                    <span>Página {userPage} de {userPageCount}</span>
+                    <span>
+                        Página {userPage} de {userPageCount}
+                    </span>
                     <div className="flex gap-2">
-                        <button onClick={() => setUserPage(p => Math.max(1, p - 1))} disabled={userPage === 1} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50">Anterior</button>
-                        <button onClick={() => setUserPage(p => Math.min(userPageCount, p + 1))} disabled={userPage === userPageCount} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50">Siguiente</button>
+                        <button
+                            onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                            disabled={userPage === 1}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >
+                            Anterior
+                        </button>
+                        <button
+                            onClick={() => setUserPage(p => Math.min(userPageCount, p + 1))}
+                            disabled={userPage === userPageCount}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >
+                            Siguiente
+                        </button>
                     </div>
                 </div>
             </section>
@@ -235,8 +321,13 @@ const DashboardEncargado: React.FC = () => {
             {/* Sección Materias */}
             <section className="bg-white rounded-xl shadow p-6">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-[rgb(0,60,113)]">Materias</h2>
-                    <button onClick={openNewMat} className="flex items-center gap-2 bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]">
+                    <h2 className="text-xl font-semibold text-[rgb(0,60,113)]">
+                        Materias
+                    </h2>
+                    <button
+                        onClick={openNewMat}
+                        className="flex items-center gap-2 bg-[rgb(0,60,113)] text-white px-4 py-2 rounded hover:bg-[rgb(0,50,95)]"
+                    >
                         <Plus size={16} /> Nueva materia
                     </button>
                 </div>
@@ -245,7 +336,10 @@ const DashboardEncargado: React.FC = () => {
                     placeholder="Buscar materia..."
                     className="w-full border rounded px-3 py-2 mb-4"
                     value={searchMateria}
-                    onChange={e => { setSearchMateria(e.target.value); setMatPage(1); }}
+                    onChange={e => {
+                        setSearchMateria(e.target.value);
+                        setMatPage(1);
+                    }}
                 />
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -260,27 +354,49 @@ const DashboardEncargado: React.FC = () => {
                                 <tr key={m.id} className="border-b hover:bg-gray-50">
                                     <td className="px-3 py-2">{m.nombre}</td>
                                     <td className="px-3 py-2 flex gap-2">
-                                        <button onClick={() => openEditMat(m)} className="text-blue-600"><Edit2 size={16} /></button>
-                                        <button onClick={() => handleDeleteMat(m.id)} className="text-red-600"><Trash2 size={16} /></button>
+                                        <button onClick={() => openEditMat(m)} className="text-blue-600">
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDeleteMat(m.id)} className="text-red-600">
+                                            <Trash2 size={16} />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
                             {paginatedMaterias.length === 0 && (
-                                <tr><td colSpan={2} className="px-3 py-4 text-center text-gray-500">No se encontraron materias.</td></tr>
+                                <tr>
+                                    <td colSpan={2} className="px-3 py-4 text-center text-gray-500">
+                                        No se encontraron materias.
+                                    </td>
+                                </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
                 <div className="flex justify-between items-center mt-4">
-                    <span>Página {matPage} de {matPageCount}</span>
+                    <span>
+                        Página {matPage} de {matPageCount}
+                    </span>
                     <div className="flex gap-2">
-                        <button onClick={() => setMatPage(p => Math.max(1, p - 1))} disabled={matPage === 1} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50">Anterior</button>
-                        <button onClick={() => setMatPage(p => Math.min(matPageCount, p + 1))} disabled={matPage === matPageCount} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50">Siguiente</button>
+                        <button
+                            onClick={() => setMatPage(p => Math.max(1, p - 1))}
+                            disabled={matPage === 1}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >
+                            Anterior
+                        </button>
+                        <button
+                            onClick={() => setMatPage(p => Math.min(matPageCount, p + 1))}
+                            disabled={matPage === matPageCount}
+                            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                        >
+                            Siguiente
+                        </button>
                     </div>
                 </div>
             </section>
 
-            {/* Modal Usuario con buscador y checkboxes */}
+            {/* Modal Usuario */}
             <Dialog
                 open={modalUserOpen}
                 onClose={() => setModalUserOpen(false)}
@@ -290,13 +406,74 @@ const DashboardEncargado: React.FC = () => {
                     <Dialog.Title className="text-lg font-semibold mb-4">
                         {editingUser ? 'Editar usuario' : 'Nuevo usuario'}
                     </Dialog.Title>
-                    <form onSubmit={e => { e.preventDefault(); handleSubmitUser(); }} className="space-y-4">
-                        <input type="text" required placeholder="Nombre" className="w-full border rounded px-3 py-2" value={userForm.nombre} onChange={e => setUserForm(f => ({ ...f, nombre: e.target.value }))} />
-                        <input type="text" required placeholder="Apellido" className="w-full border rounded px-3 py-2" value={userForm.apellido} onChange={e => setUserForm(f => ({ ...f, apellido: e.target.value }))} />
-                        <input type="text" required placeholder="Código" className="w-full border rounded px-3 py-2" value={userForm.codigoUsuario} onChange={e => { const code = e.target.value; setUserForm(f => ({ ...f, codigoUsuario: code, email: `${code}@uca.edu.sv` })); }} />
-                        <input type="email" readOnly placeholder="Email" className="w-full border rounded px-3 py-2 bg-gray-100" value={userForm.email} />
-                        <input type="password" required placeholder="Contraseña" className="w-full border rounded px-3 py-2" value={userPass} onChange={e => setUserPass(e.target.value)} />
-                        <select className="w-full border rounded px-3 py-2" value={userForm.rol} onChange={e => setUserForm(f => ({ ...f, rol: e.target.value as Role }))}>
+                    <form
+                        onSubmit={e => {
+                            e.preventDefault();
+                            handleSubmitUser();
+                        }}
+                        className="space-y-4"
+                    >
+                        <input
+                            type="text"
+                            required
+                            placeholder="Nombre"
+                            className="w-full border rounded px-3 py-2"
+                            value={userForm.nombre}
+                            onChange={e =>
+                                setUserForm(prev => ({ ...prev, nombre: e.target.value }))
+                            }
+                        />
+                        <input
+                            type="text"
+                            required
+                            placeholder="Apellido"
+                            className="w-full border rounded px-3 py-2"
+                            value={userForm.apellido}
+                            onChange={e =>
+                                setUserForm(prev => ({ ...prev, apellido: e.target.value }))
+                            }
+                        />
+                        <input
+                            type="text"
+                            required
+                            placeholder="Código"
+                            className="w-full border rounded px-3 py-2"
+                            value={userForm.codigoUsuario}
+                            onChange={e => {
+                                const code = e.target.value;
+                                setUserForm(prev => ({
+                                    ...prev,
+                                    codigoUsuario: code,
+                                    email: `${code}@uca.edu.sv`
+                                }));
+                            }}
+                        />
+                        <input
+                            type="email"
+                            readOnly
+                            placeholder="Email"
+                            className="w-full border rounded px-3 py-2 bg-gray-100"
+                            value={userForm.email}
+                        />
+                        <input
+                            type="password"
+                            required
+                            placeholder="Contraseña"
+                            className="w-full border rounded px-3 py-2"
+                            value={userPass}
+                            onChange={e => setUserPass(e.target.value)}
+                        />
+
+                        <select
+                            className="w-full border rounded px-3 py-2"
+                            value={userForm.rol}
+                            onChange={e =>
+                                setUserForm(prev => ({
+                                    ...prev,
+                                    rol: e.target.value as Role
+                                }))
+                            }
+                        >
                             <option value="INSTRUCTOR_SOCIAL">Instructor Social</option>
                             <option value="INSTRUCTOR_REMUNERADO">Instructor Remunerado</option>
                         </select>
@@ -332,7 +509,9 @@ const DashboardEncargado: React.FC = () => {
                                 </label>
                             ))}
                         </div>
-                        {userError && <div className="text-red-600 text-sm">{userError}</div>}
+                        {userError && (
+                            <div className="text-red-600 text-sm">{userError}</div>
+                        )}
 
                         <div className="flex justify-end gap-2">
                             <button
@@ -364,7 +543,10 @@ const DashboardEncargado: React.FC = () => {
                         {editingMat ? 'Editar materia' : 'Nueva materia'}
                     </Dialog.Title>
                     <form
-                        onSubmit={e => { e.preventDefault(); handleSubmitMat(); }}
+                        onSubmit={e => {
+                            e.preventDefault();
+                            handleSubmitMat();
+                        }}
                         className="space-y-4"
                     >
                         <input

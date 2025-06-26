@@ -1,4 +1,3 @@
-// hooks/useLayout.ts
 import { useContext } from 'react';
 import { LayoutContext } from '../layout/Layout';
 
