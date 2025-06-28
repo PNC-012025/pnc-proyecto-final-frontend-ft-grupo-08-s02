@@ -3,179 +3,162 @@ import { Plus, Trash2, Edit2 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
 import { calcularHorasEfectivas } from '../../utils/timeUtils';
+import {
+    listarMateriasPorUsuario,
+} from '../../services/usuarioMateriaService';
+import {
+    listarRegistrosPorUsuarioYFechas,
+    crearRegistroHora,
+    actualizarRegistroHora,
+    eliminarRegistro,
+} from '../../services/registroHoraService';
 
-interface PuenteLS { id_usuario: string; id_materia: string; }
-interface MateriaLS { id: string; nombre: string; }
+interface Materia {
+    idMateria: number;
+    nombreMateria: string;
+}
 
 interface RegistroHora {
-    id: number;
-    estudianteId: string;
-    estudianteNombre: string;
-    estudianteApellido: string;
-    fecha: string;
+    idRegistro: number;
+    fechaRegistro: string;
     horaInicio: string;
     horaFin: string;
     actividad: string;
     aula: string;
     horasEfectivas: number;
     estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-    materia: string;
+    nombreActividad: string;
+    idFormulario: number;
+    codigoUsuario: string;
 }
 
 const DashboardEstudiante: React.FC = () => {
     const { user } = useAuth();
-    const userId = user?.id ?? '';
-    const nombre = user?.nombre ?? '';
-    const apellido = user?.apellido ?? '';
+    const userId = user?.codigoUsuario ?? '';
 
-    // Estados
-    const [materias, setMaterias] = useState<MateriaLS[]>([]);
-    const [materiaSel, setMateriaSel] = useState<string>('');
-    const [registros, setRegistros] = useState<RegistroHora[]>(() => {
-        const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
-        return all.filter(r => r.estudianteId === userId);
-    });
+    // State
+    const [materias, setMaterias] = useState<Materia[]>([]);
+    const [materiaSel, setMateriaSel] = useState<number | ''>('');
+    const [registros, setRegistros] = useState<RegistroHora[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<RegistroHora | null>(null);
-    const [form, setForm] = useState<Omit<
-        RegistroHora,
-        'id' | 'horasEfectivas' | 'estado' | 'estudianteId' | 'estudianteNombre' | 'estudianteApellido'
-    >>({
-        fecha: '',
+    const [form, setForm] = useState({
+        fechaRegistro: '',
         horaInicio: '',
         horaFin: '',
         actividad: '',
         aula: '',
-        materia: ''
+        idActividad: 0,
+        idFormulario: 0,
     });
 
-    // Función para cargar materias asignadas
+    // Load materias for this user
     const loadMaterias = useCallback(() => {
-        const rawP = localStorage.getItem('usuarioXmateria');
-        const rawM = localStorage.getItem('materias');
-        if (!rawP || !rawM) {
-            setMaterias([]);
-            setMateriaSel('');
-            return;
-        }
-        const puente = JSON.parse(rawP) as PuenteLS[];
-        const catalog = JSON.parse(rawM) as MateriaLS[];
-        const asignadas = puente
-            .filter(p => p.id_usuario === userId)
-            .map(p => p.id_materia);
-        const lista = catalog.filter(m => asignadas.includes(m.id));
-        setMaterias(lista);
-        setMateriaSel(prev =>
-            lista.some(m => m.id === prev) ? prev : lista[0]?.id ?? ''
-        );
+        listarMateriasPorUsuario(userId)
+            .then(res => {
+                setMaterias(res.data);
+                setMateriaSel(res.data[0]?.idMateria ?? '');
+            })
+            .catch(console.error);
     }, [userId]);
 
-    // 1) Al montar / cambiar userId
     useEffect(() => {
         loadMaterias();
     }, [loadMaterias]);
 
-    // 2) Al recibir el evento de actualización desde el encargado
-    useEffect(() => {
-        const handler = () => loadMaterias();
-        window.addEventListener('usuarioXmateriaChanged', handler);
-        return () => window.removeEventListener('usuarioXmateriaChanged', handler);
-    }, [loadMaterias]);
+    const loadRegistros = useCallback(() => {
+        listarRegistrosPorUsuarioYFechas(userId, '1900-01-01', '2099-12-31')
+            .then(res => setRegistros(res.data))
+            .catch(console.error);
+    }, [userId]);
 
-    // Mantener la materia seleccionada en el form
     useEffect(() => {
-        setForm(prev => ({ ...prev, materia: materiaSel }));
+        loadRegistros();
+    }, [loadRegistros]);
+
+    useEffect(() => {
+        setForm(f => ({ ...f, idFormulario: Number(materiaSel) }));
     }, [materiaSel]);
 
-    // Sincronizar registros con LS
-    useEffect(() => {
-        const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
-        const otros = all.filter(r => r.estudianteId !== userId);
-        localStorage.setItem('registros', JSON.stringify([...otros, ...registros]));
-    }, [registros, userId]);
+    const pendientes = registros.filter(r => r.estado === 'PENDIENTE' && (!materiaSel || r.idFormulario === materiaSel));
 
-    const handleSubmit = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
         const horas = calcularHorasEfectivas(form.horaInicio, form.horaFin);
-        if (editing) {
-            setRegistros(prev =>
-                prev.map(r =>
-                    r.id === editing.id
-                        ? { ...r, ...form, horasEfectivas: horas, estudianteNombre: nombre, estudianteApellido: apellido }
-                        : r
-                )
-            );
-        } else {
-            const nuevo: RegistroHora = {
-                id: Date.now(),
-                estudianteId: userId,
-                estudianteNombre: nombre,
-                estudianteApellido: apellido,
-                ...form,
-                horasEfectivas: horas,
-                estado: 'PENDIENTE'
-            };
-            setRegistros(prev => [...prev, nuevo]);
-        }
-        setModalOpen(false);
-        setEditing(null);
-        setForm({ fecha: '', horaInicio: '', horaFin: '', actividad: '', aula: '', materia: materiaSel });
+        const dto = {
+            fechaRegistro: form.fechaRegistro,
+            horaInicio: form.horaInicio,
+            horaFin: form.horaFin,
+            horasEfectivas: horas,
+            aula: form.aula,
+            codigoUsuario: userId,
+            idActividad: form.idActividad,
+            idFormulario: form.idFormulario,
+        };
+
+        const action = editing
+            ? actualizarRegistroHora(editing.idRegistro.toString(), dto)
+            : crearRegistroHora(dto);
+
+        action
+            .then(res => {
+                setRegistros(prev => {
+                    if (editing) {
+                        return prev.map(r => r.idRegistro === editing.idRegistro ? res.data : r);
+                    } else {
+                        return [...prev, res.data];
+                    }
+                });
+                setModalOpen(false);
+                setEditing(null);
+                // reset form
+                setForm({
+                    fechaRegistro: '',
+                    horaInicio: '',
+                    horaFin: '',
+                    actividad: '',
+                    aula: '',
+                    idActividad: 0,
+                    idFormulario: Number(materiaSel) || 0,
+                });
+            })
+            .catch(console.error);
     };
 
     const handleDelete = (id: number) => {
-        setRegistros(prev => prev.filter(r => r.id !== id));
+        eliminarRegistro(id.toString())
+            .then(() => setRegistros(prev => prev.filter(r => r.idRegistro !== id)))
+            .catch(console.error);
     };
 
     const handleEdit = (reg: RegistroHora) => {
         if (reg.estado !== 'PENDIENTE') return;
         setEditing(reg);
         setForm({
-            fecha: reg.fecha,
+            fechaRegistro: reg.fechaRegistro,
             horaInicio: reg.horaInicio,
             horaFin: reg.horaFin,
             actividad: reg.actividad,
             aula: reg.aula,
-            materia: reg.materia
+            idActividad: reg.idFormulario,    // adjust if you have actual idActividad
+            idFormulario: reg.idFormulario,
         });
-        setMateriaSel(reg.materia);
         setModalOpen(true);
     };
 
-    const pendientes = registros.filter(r => r.estado === 'PENDIENTE');
-    const all = JSON.parse(localStorage.getItem('registros') || '[]') as RegistroHora[];
-    const horasAprobadas = all
-        .filter(r => r.estudianteId === userId && r.estado === 'APROBADO')
-        .reduce((sum, r) => sum + r.horasEfectivas, 0);
-    const porcentaje = Math.min((horasAprobadas / 600) * 100, 100);
-
     return (
         <div className="space-y-8 p-4">
-            {/* Progreso */}
-            <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold text-[#003c71] mb-2">
-                    Horas sociales acumuladas
-                </h2>
-                <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
-                    <div
-                        className="bg-blue-600 h-4 rounded-full"
-                        style={{ width: `${porcentaje}%` }}
-                    />
-                </div>
-                <p className="text-sm text-gray-600">
-                    {horasAprobadas} horas aprobadas de 600
-                </p>
-            </div>
-
             {/* Selector de materia */}
             <div className="flex items-center gap-2">
                 <label className="font-medium">Materia:</label>
                 <select
                     value={materiaSel}
-                    onChange={e => setMateriaSel(e.target.value)}
+                    onChange={e => setMateriaSel(Number(e.target.value))}
                     className="border rounded px-3 py-2"
                 >
                     {materias.map(m => (
-                        <option key={m.id} value={m.id}>
-                            {m.nombre}
+                        <option key={m.idMateria} value={m.idMateria}>
+                            {m.nombreMateria}
                         </option>
                     ))}
                 </select>
@@ -189,7 +172,7 @@ const DashboardEstudiante: React.FC = () => {
                     </h2>
                     <button
                         onClick={() => setModalOpen(true)}
-                        className="flex items-center gap-2 text-sm text-white bg-[#003c71] px-4 py-2 rounded hover:bg-[#002f59]"
+                        className="flex items-center gap-2 text-sm text-white bg-[#003c71] px-4 py-2 rounded"
                     >
                         <Plus size={16} /> Nuevo registro
                     </button>
@@ -210,11 +193,11 @@ const DashboardEstudiante: React.FC = () => {
                     <tbody>
                         {pendientes.length > 0 ? (
                             pendientes.map(reg => (
-                                <tr key={reg.id} className="border-b hover:bg-gray-50">
-                                    <td className="py-2">{reg.fecha}</td>
+                                <tr key={reg.idRegistro} className="border-b hover:bg-gray-50">
+                                    <td className="py-2">{reg.fechaRegistro}</td>
                                     <td>{reg.horaInicio}</td>
                                     <td>{reg.horaFin}</td>
-                                    <td>{reg.actividad}</td>
+                                    <td>{reg.nombreActividad}</td>
                                     <td>{reg.aula}</td>
                                     <td>{reg.horasEfectivas}</td>
                                     <td>{reg.estado}</td>
@@ -222,7 +205,7 @@ const DashboardEstudiante: React.FC = () => {
                                         <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
                                             <Edit2 size={16} />
                                         </button>
-                                        <button onClick={() => handleDelete(reg.id)} className="text-red-600 hover:underline">
+                                        <button onClick={() => handleDelete(reg.idRegistro)} className="text-red-600 hover:underline">
                                             <Trash2 size={16} />
                                         </button>
                                     </td>
@@ -252,18 +235,12 @@ const DashboardEstudiante: React.FC = () => {
                     <Dialog.Title className="text-lg font-semibold mb-4">
                         {editing ? 'Editar registro' : 'Nuevo registro'}
                     </Dialog.Title>
-                    <form
-                        onSubmit={e => {
-                            e.preventDefault();
-                            handleSubmit();
-                        }}
-                        className="space-y-4"
-                    >
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <input
                             type="date"
                             className="w-full border rounded px-3 py-2"
-                            value={form.fecha}
-                            onChange={e => setForm(prev => ({ ...prev, fecha: e.target.value }))}
+                            value={form.fechaRegistro}
+                            onChange={e => setForm(f => ({ ...f, fechaRegistro: e.target.value }))}
                             required
                         />
                         <div className="flex gap-2">
@@ -271,14 +248,14 @@ const DashboardEstudiante: React.FC = () => {
                                 type="time"
                                 className="w-1/2 border rounded px-3 py-2"
                                 value={form.horaInicio}
-                                onChange={e => setForm(prev => ({ ...prev, horaInicio: e.target.value }))}
+                                onChange={e => setForm(f => ({ ...f, horaInicio: e.target.value }))}
                                 required
                             />
                             <input
                                 type="time"
                                 className="w-1/2 border rounded px-3 py-2"
                                 value={form.horaFin}
-                                onChange={e => setForm(prev => ({ ...prev, horaFin: e.target.value }))}
+                                onChange={e => setForm(f => ({ ...f, horaFin: e.target.value }))}
                                 required
                             />
                         </div>
@@ -287,7 +264,7 @@ const DashboardEstudiante: React.FC = () => {
                             placeholder="Actividad realizada"
                             className="w-full border rounded px-3 py-2"
                             value={form.actividad}
-                            onChange={e => setForm(prev => ({ ...prev, actividad: e.target.value }))}
+                            onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))}
                             required
                         />
                         <input
@@ -295,7 +272,7 @@ const DashboardEstudiante: React.FC = () => {
                             placeholder="Aula"
                             className="w-full border rounded px-3 py-2"
                             value={form.aula}
-                            onChange={e => setForm(prev => ({ ...prev, aula: e.target.value }))}
+                            onChange={e => setForm(f => ({ ...f, aula: e.target.value }))}
                             required
                         />
                         <div className="flex justify-end gap-2">
