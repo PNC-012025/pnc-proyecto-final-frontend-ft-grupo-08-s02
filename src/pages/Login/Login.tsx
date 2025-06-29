@@ -1,19 +1,15 @@
-import { useState, FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import useAuth from '../../hooks/useAuth';
+// src/pages/Login/Login.tsx
+import React, { useState, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import useAuth from '../../hooks/AuthContext';
 import { User, Lock } from 'lucide-react';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
+import type { UsuarioLoginDTO } from '../../types';
 
 import img1 from '../../assets/login/DEI.jpg';
 import img2 from '../../assets/login/edificio.jpg';
 import img3 from '../../assets/login/Mural.jpg';
-
-interface FormValues {
-    carnet: string;
-    password: string;
-    remember: boolean;
-}
 
 const slides = [
     {
@@ -34,37 +30,29 @@ const slides = [
 ];
 
 const Login: React.FC = () => {
-    const [values, setValues] = useState<FormValues>({
-        carnet: '',
+    const [values, setValues] = useState<UsuarioLoginDTO>({
+        email: '',
         password: '',
-        remember: false,
     });
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const { signin } = useAuth();
     const navigate = useNavigate();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
-        setValues(v => ({
-            ...v,
-            [name]: type === 'checkbox' ? checked : value,
-        }));
+        const { name, value } = e.target;
+        setValues(v => ({ ...v, [name]: value }));
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
-
-        // Construir email completo a partir del carnet
-        const email = `${values.carnet.trim()}@uca.edu.sv`;
-
         try {
-            await login({ email, password: values.password });
+            await signin(values);
             navigate('/dashboard');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Credenciales inválidas');
+            setError(err.response?.data?.message || 'Email o contraseña inválidos');
         } finally {
             setLoading(false);
         }
@@ -123,22 +111,21 @@ const Login: React.FC = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Carnet + dominio fijo */}
+                        {/* Email */}
                         <div className="relative flex items-center">
                             <User className="absolute left-3 text-gray-400" size={20} />
                             <input
-                                type="text"
-                                name="carnet"
-                                value={values.carnet}
+                                type="email"
+                                name="email"
+                                value={values.email}
                                 onChange={handleChange}
                                 required
-                                placeholder="Carnet"
-                                className="w-full pl-10 pr-24 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
+                                placeholder="Email"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
-                            <span className="absolute right-4 text-gray-500">@uca.edu.sv</span>
                         </div>
 
-                        {/* Contraseña */}
+                        {/* Password */}
                         <div className="relative">
                             <Lock className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={20} />
                             <input
@@ -151,7 +138,6 @@ const Login: React.FC = () => {
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
                         </div>
-
 
                         {/* Submit */}
                         <button

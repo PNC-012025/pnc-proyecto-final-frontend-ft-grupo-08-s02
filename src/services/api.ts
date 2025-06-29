@@ -1,20 +1,18 @@
-import axios from 'axios';
-import endpoints from '../utils/endpoints';
+import axios from 'axios'
+import endpoints from '../utils/endpoints'
 
 const api = axios.create({
-    baseURL: endpoints.baseURL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-});
+    baseURL: '', 
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 10_000,
+})
 
-// Interceptor para añadir token
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
+api.interceptors.request.use(config => {
+    const token = localStorage.getItem('token')
     if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.Authorization = `Bearer ${token}`
     }
-    return config;
-});
+    return config
+})
 
-export default api;
+export default api

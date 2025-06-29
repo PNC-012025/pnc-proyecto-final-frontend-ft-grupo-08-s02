@@ -59,7 +59,7 @@ const DashboardEncargado: React.FC = () => {
     useEffect(() => {
         listarUsuarios()
             .then(res => {
-                // añadimos materiaIds vacíos por defecto
+                // materiaIds vacíos por defecto
                 const data = res.data.map(u => ({ ...u, materiaIds: [] }));
                 setUsuarios(data);
             })

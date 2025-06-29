@@ -1,36 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, FormEvent } from 'react';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
 import { calcularHorasEfectivas } from '../../utils/timeUtils';
-import {
-    listarMateriasPorUsuario,
-} from '../../services/usuarioMateriaService';
+import { listarMateriasPorUsuario } from '../../services/usuarioMateriaService';
 import {
     listarRegistrosPorUsuarioYFechas,
     crearRegistroHora,
     actualizarRegistroHora,
     eliminarRegistro,
 } from '../../services/registroHoraService';
-
-interface Materia {
-    idMateria: number;
-    nombreMateria: string;
-}
-
-interface RegistroHora {
-    idRegistro: number;
-    fechaRegistro: string;
-    horaInicio: string;
-    horaFin: string;
-    actividad: string;
-    aula: string;
-    horasEfectivas: number;
-    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-    nombreActividad: string;
-    idFormulario: number;
-    codigoUsuario: string;
-}
+import type { Materia, RegistroHora, RegistroDTO } from '../../types';
 
 const DashboardEstudiante: React.FC = () => {
     const { user } = useAuth();
@@ -38,26 +18,35 @@ const DashboardEstudiante: React.FC = () => {
 
     // State
     const [materias, setMaterias] = useState<Materia[]>([]);
-    const [materiaSel, setMateriaSel] = useState<number | ''>('');
+    const [materiaSel, setMateriaSel] = useState<string>('');
     const [registros, setRegistros] = useState<RegistroHora[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<RegistroHora | null>(null);
-    const [form, setForm] = useState({
+    const [form, setForm] = useState<{
+        fechaRegistro: string;
+        horaInicio: string;
+        horaFin: string;
+        actividad: string;
+        aula: string;
+        idActividad: string;
+        idFormulario: string;
+    }>({
         fechaRegistro: '',
         horaInicio: '',
         horaFin: '',
         actividad: '',
         aula: '',
-        idActividad: 0,
-        idFormulario: 0,
+        idActividad: '',
+        idFormulario: '',
     });
 
-    // Load materias for this user
+    // Load materias
     const loadMaterias = useCallback(() => {
         listarMateriasPorUsuario(userId)
             .then(res => {
-                setMaterias(res.data);
-                setMateriaSel(res.data[0]?.idMateria ?? '');
+                const data = res.data as Materia[];
+                setMaterias(data);
+                setMateriaSel(data[0]?.idMateria ?? '');
             })
             .catch(console.error);
     }, [userId]);
@@ -66,9 +55,10 @@ const DashboardEstudiante: React.FC = () => {
         loadMaterias();
     }, [loadMaterias]);
 
+    // Load registros
     const loadRegistros = useCallback(() => {
         listarRegistrosPorUsuarioYFechas(userId, '1900-01-01', '2099-12-31')
-            .then(res => setRegistros(res.data))
+            .then(res => setRegistros(res.data as RegistroHora[]))
             .catch(console.error);
     }, [userId]);
 
@@ -76,16 +66,23 @@ const DashboardEstudiante: React.FC = () => {
         loadRegistros();
     }, [loadRegistros]);
 
+    // Cuando cambie materia seleccionada, actualizo idFormulario en el form
     useEffect(() => {
-        setForm(f => ({ ...f, idFormulario: Number(materiaSel) }));
+        setForm(f => ({ ...f, idFormulario: materiaSel }));
     }, [materiaSel]);
 
-    const pendientes = registros.filter(r => r.estado === 'PENDIENTE' && (!materiaSel || r.idFormulario === materiaSel));
+    // Filtrado de pendientes
+    const pendientes = registros.filter(r =>
+        r.estado === 'PENDIENTE' &&
+        (!materiaSel || r.idFormulario === materiaSel)
+    );
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Crear o actualizar
+    const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
         const horas = calcularHorasEfectivas(form.horaInicio, form.horaFin);
-        const dto = {
+
+        const dto: RegistroDTO = {
             fechaRegistro: form.fechaRegistro,
             horaInicio: form.horaInicio,
             horaFin: form.horaFin,
@@ -97,40 +94,40 @@ const DashboardEstudiante: React.FC = () => {
         };
 
         const action = editing
-            ? actualizarRegistroHora(editing.idRegistro.toString(), dto)
+            ? actualizarRegistroHora(editing.idRegistro, dto)
             : crearRegistroHora(dto);
 
         action
             .then(res => {
-                setRegistros(prev => {
-                    if (editing) {
-                        return prev.map(r => r.idRegistro === editing.idRegistro ? res.data : r);
-                    } else {
-                        return [...prev, res.data];
-                    }
-                });
+                const saved = res.data as RegistroHora;
+                setRegistros(prev =>
+                    editing
+                        ? prev.map(r => r.idRegistro === editing.idRegistro ? saved : r)
+                        : [...prev, saved]
+                );
                 setModalOpen(false);
                 setEditing(null);
-                // reset form
                 setForm({
                     fechaRegistro: '',
                     horaInicio: '',
                     horaFin: '',
                     actividad: '',
                     aula: '',
-                    idActividad: 0,
-                    idFormulario: Number(materiaSel) || 0,
+                    idActividad: '',
+                    idFormulario: materiaSel,
                 });
             })
             .catch(console.error);
     };
 
-    const handleDelete = (id: number) => {
-        eliminarRegistro(id.toString())
+    // Borrar
+    const handleDelete = (id: string) => {
+        eliminarRegistro(id)
             .then(() => setRegistros(prev => prev.filter(r => r.idRegistro !== id)))
             .catch(console.error);
     };
 
+    // Editar
     const handleEdit = (reg: RegistroHora) => {
         if (reg.estado !== 'PENDIENTE') return;
         setEditing(reg);
@@ -140,7 +137,7 @@ const DashboardEstudiante: React.FC = () => {
             horaFin: reg.horaFin,
             actividad: reg.actividad,
             aula: reg.aula,
-            idActividad: reg.idFormulario,    // adjust if you have actual idActividad
+            idActividad: reg.idFormulario,    // si tuvieras idActividad real, cámbialo
             idFormulario: reg.idFormulario,
         });
         setModalOpen(true);
@@ -153,7 +150,7 @@ const DashboardEstudiante: React.FC = () => {
                 <label className="font-medium">Materia:</label>
                 <select
                     value={materiaSel}
-                    onChange={e => setMateriaSel(Number(e.target.value))}
+                    onChange={e => setMateriaSel(e.target.value)}
                     className="border rounded px-3 py-2"
                 >
                     {materias.map(m => (
@@ -181,37 +178,35 @@ const DashboardEstudiante: React.FC = () => {
                     <thead>
                         <tr className="text-gray-600 border-b">
                             <th className="py-2">Fecha</th>
-                            <th>Hora inicio</th>
-                            <th>Hora fin</th>
+                            <th>Inicio</th>
+                            <th>Fin</th>
                             <th>Actividad</th>
                             <th>Aula</th>
-                            <th>Horas efectivas</th>
+                            <th>Horas</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {pendientes.length > 0 ? (
-                            pendientes.map(reg => (
-                                <tr key={reg.idRegistro} className="border-b hover:bg-gray-50">
-                                    <td className="py-2">{reg.fechaRegistro}</td>
-                                    <td>{reg.horaInicio}</td>
-                                    <td>{reg.horaFin}</td>
-                                    <td>{reg.nombreActividad}</td>
-                                    <td>{reg.aula}</td>
-                                    <td>{reg.horasEfectivas}</td>
-                                    <td>{reg.estado}</td>
-                                    <td className="flex gap-2">
-                                        <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button onClick={() => handleDelete(reg.idRegistro)} className="text-red-600 hover:underline">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))
-                        ) : (
+                        {pendientes.length ? pendientes.map(reg => (
+                            <tr key={reg.idRegistro} className="border-b hover:bg-gray-50">
+                                <td className="py-2">{reg.fechaRegistro}</td>
+                                <td>{reg.horaInicio}</td>
+                                <td>{reg.horaFin}</td>
+                                <td>{reg.nombreActividad}</td>
+                                <td>{reg.aula}</td>
+                                <td>{reg.horasEfectivas}</td>
+                                <td>{reg.estado}</td>
+                                <td className="flex gap-2">
+                                    <button onClick={() => handleEdit(reg)} className="text-blue-600 hover:underline">
+                                        <Edit2 size={16} />
+                                    </button>
+                                    <button onClick={() => handleDelete(reg.idRegistro)} className="text-red-600 hover:underline">
+                                        <Trash2 size={16} />
+                                    </button>
+                                </td>
+                            </tr>
+                        )) : (
                             <tr>
                                 <td colSpan={8} className="py-4 text-center text-gray-500">
                                     No tienes registros pendientes.
@@ -225,10 +220,7 @@ const DashboardEstudiante: React.FC = () => {
             {/* Modal crear/editar */}
             <Dialog
                 open={modalOpen}
-                onClose={() => {
-                    setModalOpen(false);
-                    setEditing(null);
-                }}
+                onClose={() => { setModalOpen(false); setEditing(null); }}
                 className="fixed inset-0 z-50 flex items-center justify-center"
             >
                 <Dialog.Panel className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
@@ -261,7 +253,7 @@ const DashboardEstudiante: React.FC = () => {
                         </div>
                         <input
                             type="text"
-                            placeholder="Actividad realizada"
+                            placeholder="Actividad"
                             className="w-full border rounded px-3 py-2"
                             value={form.actividad}
                             onChange={e => setForm(f => ({ ...f, actividad: e.target.value }))}
@@ -278,10 +270,7 @@ const DashboardEstudiante: React.FC = () => {
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => {
-                                    setModalOpen(false);
-                                    setEditing(null);
-                                }}
+                                onClick={() => { setModalOpen(false); setEditing(null); }}
                                 className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
                             >
                                 Cancelar
