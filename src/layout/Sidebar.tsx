@@ -1,57 +1,76 @@
-import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import useAuth from '../hooks/useAuth'
-import { Book, UserCheck, Clock, LogOut } from 'lucide-react'
-import ucaBg from '../assets/sidebar/uca.png'
+import React, { useContext } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import useAuth from '../hooks/useAuth';
+import { Book, UserCheck, Clock, LogOut } from 'lucide-react';
+import { LayoutContext } from './Layout';
+import ucaBg from '../assets/sidebar/uca.png';
 
 const Sidebar: React.FC = () => {
-    const { user, signout } = useAuth()
-    const { pathname } = useLocation()
+    const { user, signout } = useAuth();
+    const { pathname } = useLocation();
+    const { collapsed } = useContext(LayoutContext);
 
     const isActive = (path: string) =>
-        pathname === path || pathname.startsWith(path)
+        path === '/dashboard'
+            ? pathname === '/dashboard'
+            : pathname.startsWith(path);
+
+    const links = user?.rol === 'ENCARGADO'
+        ? [
+            { to: '/dashboard', label: 'Inicio', icon: <Book size={20} /> },
+            { to: '/dashboard/validaciones', label: 'Validaciones', icon: <UserCheck size={20} /> },
+            { to: '/dashboard/historico', label: 'Registros', icon: <Clock size={20} /> },
+        ]
+        : [
+            { to: '/dashboard', label: 'Inicio', icon: <Book size={20} /> },
+            { to: '/dashboard/registros', label: 'Mis Registros', icon: <Clock size={20} /> },
+        ];
 
     return (
-        <aside className="w-64 bg-white border-r h-full flex flex-col">
-            <div className="p-4 flex items-center gap-2">
-                <img src={ucaBg} alt="UCA" className="h-8" />
-                <span className="font-bold text-lg">PNC</span>
-            </div>
-            <nav className="flex-1 px-4 space-y-2">
-                <Link
-                    to="/dashboard"
-                    className={`flex items-center gap-2 p-2 rounded ${isActive('/dashboard') ? 'bg-blue-100' : 'hover:bg-gray-100'
-                        }`}
-                >
-                    <Book size={16} /> Dashboard
-                </Link>
-                {user?.rol === 'ENCARGADO' && (
-                    <Link
-                        to="/dashboard/encargado"
-                        className={`flex items-center gap-2 p-2 rounded ${isActive('/dashboard/encargado') ? 'bg-blue-100' : 'hover:bg-gray-100'
-                            }`}
-                    >
-                        <UserCheck size={16} /> Gestión usuarios
-                    </Link>
-                )}
-                {user?.rol === 'INSTRUCTOR_NORMAL' && (
-                    <Link
-                        to="/dashboard/estudiante"
-                        className={`flex items-center gap-2 p-2 rounded ${isActive('/dashboard/estudiante') ? 'bg-blue-100' : 'hover:bg-gray-100'
-                            }`}
-                    >
-                        <Clock size={16} /> Mis registros
-                    </Link>
-                )}
-            </nav>
-            <button
-                onClick={signout}
-                className="m-4 p-2 text-red-600 flex items-center gap-2 hover:bg-gray-100 rounded"
+        <aside
+            className={`
+                bg-white h-full flex flex-col shadow-lg transition-all duration-300
+                ${collapsed ? 'w-0 opacity-0 overflow-hidden' : 'w-64'}
+            `}
+        >
+            {/* Perfil con bg + degradado */}
+            <div
+                className="relative h-40 bg-cover bg-center"
+                style={{ backgroundImage: `url(${ucaBg})` }}
             >
-                <LogOut size={16} /> Cerrar sesión
-            </button>
-        </aside>
-    )
-}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute bottom-3 left-4 text-white">
+                    <p className="font-bold">{user?.nombre}</p>
+                    <p className="text-xs flex items-center gap-1">
+                        <span className="material-icons text-sm">Email: </span>
+                        {user?.correo}
+                    </p>
+                </div>
+            </div>
 
-export default Sidebar
+            {/* Navegación */}
+            <nav className="flex-1 mt-4">
+                {links.map(({ to, label, icon }) => {
+                    const active = isActive(to);
+                    return (
+                        <Link
+                            key={to}
+                            to={to}
+                            className={`
+                                flex items-center gap-3 px-5 py-3 text-base font-medium transition
+                                ${active
+                                    ? 'bg-white text-[rgb(0,60,113)] border-l-4 border-[rgb(0,60,113)]'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-[rgb(0,60,113)]'}
+                            `}
+                        >
+                            {icon}
+                            {label}
+                        </Link>
+                    );
+                })}
+            </nav>
+        </aside>
+    );
+};
+
+export default Sidebar;

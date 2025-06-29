@@ -2,9 +2,9 @@ import axios from 'axios';
 import endpoints from '../utils/endpoints';
 
 const api = axios.create({
-    baseURL: endpoints.baseURL,       
+    baseURL: endpoints.baseURL,
     headers: { 'Content-Type': 'application/json' },
-    timeout: 10_000,
+    timeout: 10000,
 });
 
 api.interceptors.request.use(config => {

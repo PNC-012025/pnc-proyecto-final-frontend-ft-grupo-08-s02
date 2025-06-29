@@ -1,4 +1,3 @@
-// src/pages/Login/Login.tsx
 import React, { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
@@ -11,7 +10,7 @@ import img2 from '../../assets/login/edificio.jpg';
 import img3 from '../../assets/login/Mural.jpg';
 
 interface FormValues {
-    carnet: string;
+    email: string;
     password: string;
 }
 
@@ -34,7 +33,7 @@ const slides = [
 ];
 
 const Login: React.FC = () => {
-    const [values, setValues] = useState<FormValues>({ carnet: '', password: '' });
+    const [values, setValues] = useState<FormValues>({ email: '', password: '' });
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const { signin } = useAuth();
@@ -49,9 +48,8 @@ const Login: React.FC = () => {
         setError(null);
         setLoading(true);
 
-        const email = `${values.carnet.trim()}@uca.edu.sv`;
         try {
-            await signin({ email, password: values.password });
+            await signin({ email: values.email.trim(), password: values.password });
             // signin() ya hace navigate al dashboard
         } catch (err: any) {
             setError(err.response?.data?.message || 'Credenciales inválidas');
@@ -113,19 +111,18 @@ const Login: React.FC = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Carnet + dominio fijo */}
+                        {/* Email completo */}
                         <div className="relative flex items-center">
                             <User className="absolute left-3 text-gray-400" size={20} />
                             <input
-                                type="text"
-                                name="carnet"
-                                value={values.carnet}
+                                type="email"
+                                name="email"
+                                value={values.email}
                                 onChange={handleChange}
                                 required
-                                placeholder="Carnet"
-                                className="w-full pl-10 pr-24 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
+                                placeholder="Correo electrónico"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
-                            <span className="absolute right-4 text-gray-500">@uca.edu.sv</span>
                         </div>
 
                         {/* Contraseña */}
