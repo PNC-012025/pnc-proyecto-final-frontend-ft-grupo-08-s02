@@ -9,13 +9,14 @@ export interface AuthContextProps {
   signin: (creds: UsuarioLoginDTO) => Promise<void>;
   signout: () => void;
   loading: boolean;
+  updateUser: (updatedUser: Usuario) => void;
 }
 
 const AuthContext = createContext<AuthContextProps>({} as AuthContextProps);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Usuario | null>(null);
-  const [loading, setLoading] = useState(true); // ← NUEVO
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,14 +35,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(user);
         } catch (err: any) {
           console.error('Error verificando token:', err);
-          // Limpiar datos de sesión
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setUser(null);
           
-          // Solo redirigir si no estamos ya en login y no es un error de red
-          if (location.pathname !== '/login' && err.response?.status !== 0) {
-            navigate('/login');
+          // Solo limpiar datos de sesión y redirigir si es un error de autenticación real
+          // (401 Unauthorized, 403 Forbidden, o token inválido)
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+            
+            if (location.pathname !== '/login') {
+              navigate('/login');
+            }
+          } else if (err.response?.status === 404) {
+            // Si el usuario no se encuentra (404), podría ser que se eliminó
+            // pero mantenemos la sesión activa por si es un error temporal
+            console.warn('Usuario no encontrado, pero manteniendo sesión activa');
+          } else if (err.response?.status === 0 || err.code === 'NETWORK_ERROR') {
+            // Error de red, mantener la sesión activa
+            console.warn('Error de red, manteniendo sesión activa');
+          } else {
+            // Para otros errores (500, etc.), mantener la sesión activa
+            console.warn('Error del servidor, manteniendo sesión activa:', err.response?.status);
           }
         }
       }
@@ -85,8 +99,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     navigate('/login');
   };
 
+  const updateUser = (updatedUser: Usuario) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, signin, signout, loading }}>
+    <AuthContext.Provider value={{ user, signin, signout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

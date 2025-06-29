@@ -21,11 +21,17 @@ api.interceptors.response.use(
     (error) => {
         if (error.response?.status === 401 || error.response?.status === 403) {
             // Token expirado o inválido
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            console.warn('Error de autenticación detectado:', error.response?.status);
             
-            // Solo redirigir si no estamos ya en la página de login
-            if (window.location.pathname !== '/login') {
+            // Solo limpiar datos de sesión y redirigir si no estamos en una operación de edición
+            // y no estamos ya en la página de login
+            const currentPath = window.location.pathname;
+            const isEditingOperation = currentPath.includes('/dashboard') && 
+                                     (error.config?.method === 'put' || error.config?.method === 'post');
+            
+            if (!isEditingOperation && currentPath !== '/login') {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
                 window.location.href = '/login';
             }
         }

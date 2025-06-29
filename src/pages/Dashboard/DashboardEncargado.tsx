@@ -25,10 +25,12 @@ import type {
 import { Plus, Trash2, Edit2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import useAuth from '../../hooks/useAuth';
 
 const ITEMS_PER_PAGE = 10;
 
 const DashboardEncargado: React.FC = () => {
+    const { user: currentUser, updateUser } = useAuth();
     const [searchUsuario, setSearchUsuario] = useState('');
     const [userPage, setUserPage] = useState(1);
     const [usuarios, setUsuarios] = useState<UsuarioConMaterias[]>([]);
@@ -171,16 +173,38 @@ const DashboardEncargado: React.FC = () => {
                             return materiaToDelete ? eliminarAsociacion(String(materiaToDelete.idUsuarioXMateria)) : Promise.resolve();
                         })
                 );
+
+                // Crear nuevas asociaciones solo para las materias que no existían previamente
+                const materiasNuevas = selectedMaterias.filter(nombreMateria => !prevNombres.includes(nombreMateria));
+                await Promise.all(
+                    materiasNuevas.map((nombreMateria) => {
+                        return asociarUsuarioConMateria(dto.codigoUsuario, nombreMateria);
+                    })
+                );
+            } else {
+                // Para usuarios nuevos, crear todas las asociaciones seleccionadas
+                await Promise.all(
+                    selectedMaterias.map((nombreMateria) => {
+                        return asociarUsuarioConMateria(dto.codigoUsuario, nombreMateria);
+                    })
+                );
             }
 
-            // Crear nuevas asociaciones
-            await Promise.all(
-                selectedMaterias.map((nombreMateria) => {
-                    return asociarUsuarioConMateria(dto.codigoUsuario, nombreMateria);
-                })
-            );
-
             toast.success(editingUser ? 'Usuario actualizado con éxito' : 'Usuario creado exitosamente');
+            
+            // Si se está editando el usuario actual, actualizar el contexto
+            if (editingUser && currentUser && editingUser.idUsuario === currentUser.idUsuario) {
+                const updatedUser = {
+                    ...currentUser,
+                    nombre: dto.nombre,
+                    apellido: dto.apellido,
+                    correo: dto.correo,
+                    rol: dto.rol,
+                    codigoUsuario: dto.codigoUsuario
+                };
+                updateUser(updatedUser);
+            }
+            
             fetchUsuarios();
             setModalUserOpen(false);
         } catch (err: any) {
