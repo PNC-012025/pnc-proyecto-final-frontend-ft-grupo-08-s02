@@ -40,25 +40,25 @@ const ValidacionesPage: React.FC = () => {
     }, []);
 
     const getCodigoEstudiante = (r: RegistroLocal) => {
-        const u = usuarios.find(u => u.id === r.estudianteId);
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
         return u?.codigoUsuario ?? r.estudianteId;
     };
 
     const getNombreEstudiante = (r: RegistroLocal) => {
-        const u = usuarios.find(u => u.id === r.estudianteId);
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
         return u ? `${u.nombre} ${u.apellido}` : r.estudianteId;
     };
 
     const getMateriaEstudiante = (r: RegistroLocal) => {
         if (r.materia) {
-            const m = materias.find(m => m.id === r.materia);
-            if (m) return m.nombre;
+            const m = materias.find(m => m.idMateria === r.materia);
+            if (m) return m.nombreMateria;
         }
         // fallback: materia asignada al usuario
-        const u = usuarios.find(u => u.id === r.estudianteId);
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
         if (u?.materiaId) {
-            const m = materias.find(m => m.id === u.materiaId);
-            if (m) return m.nombre;
+            const m = materias.find(m => m.idMateria === u.materiaId);
+            if (m) return m.nombreMateria;
         }
         return '—';
     };
@@ -89,7 +89,7 @@ const ValidacionesPage: React.FC = () => {
         <div className="space-y-6 p-4">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-[#003c71]">Validaciones de Registros</h2>
-                <span className="text-gray-600">Encargado: <strong>{user?.nombre}</strong></span>
+                <span className="text-gray-600">Usuario: <strong>{user?.nombre}</strong></span>
             </div>
 
             <div className="flex items-center gap-4">

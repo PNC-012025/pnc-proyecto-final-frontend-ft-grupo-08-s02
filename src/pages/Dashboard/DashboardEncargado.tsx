@@ -45,7 +45,7 @@ const DashboardEncargado: React.FC = () => {
     const [userError, setUserError] = useState<string | null>(null);
 
     const [materiaSearch, setMateriaSearch] = useState('');
-    const [selectedMaterias, setSelectedMaterias] = useState<number[]>([]);
+    const [selectedMaterias, setSelectedMaterias] = useState<string[]>([]);
 
     const [searchMateria, setSearchMateria] = useState('');
     const [matPage, setMatPage] = useState(1);
@@ -56,7 +56,6 @@ const DashboardEncargado: React.FC = () => {
     const [matForm, setMatForm] = useState<{ nombreMateria: string }>({ nombreMateria: '' });
     const [matError, setMatError] = useState<string | null>(null);
 
-    // Filtrado y paginación de usuarios
     const filteredUsuarios = useMemo(() => {
         return usuarios.filter(u =>
             (`${u.nombre} ${u.apellido}`.toLowerCase().includes(searchUsuario.toLowerCase()))
@@ -72,7 +71,6 @@ const DashboardEncargado: React.FC = () => {
         return filteredUsuarios.slice(start, start + ITEMS_PER_PAGE);
     }, [filteredUsuarios, userPage]);
 
-    // Filtrado y paginación de materias
     const filteredMaterias = useMemo(() => {
         return materias.filter(m =>
             m.nombreMateria.toLowerCase().includes(searchMateria.toLowerCase())
@@ -88,13 +86,39 @@ const DashboardEncargado: React.FC = () => {
         return filteredMaterias.slice(start, start + ITEMS_PER_PAGE);
     }, [filteredMaterias, matPage]);
 
-    const fetchUsuarios = () => {
-        listarUsuarios()
-            .then(res => {
-                const data = res.data.map(u => ({ ...u, materiaIds: [] }));
-                setUsuarios(data);
-            })
-            .catch(() => toast.error('Error al cargar usuarios'));
+    const fetchUsuarios = async () => {
+        try {
+            const res = await listarUsuarios();
+            const usuariosData = res.data;
+
+            const usuariosConMaterias = await Promise.all(
+                usuariosData.map(async (u) => {
+                    try {
+                        const materiasRes = await listarMateriasPorUsuario(String(u.idUsuario));
+                        console.log(`Materias para usuario ${u.idUsuario}:`, materiasRes.data);
+                        
+                        // Extraer los nombres de las materias de la respuesta
+                        const materiaNombres = materiasRes.data.map((m: any) => m.nombreMateria);
+                        
+                        return {
+                            ...u,
+                            materiaIds: materiaNombres // Ahora guardamos los nombres en lugar de IDs
+                        } as UsuarioConMaterias;
+                    } catch (error) {
+                        console.error(`Error obteniendo materias para usuario ${u.idUsuario}:`, error);
+                        return {
+                            ...u,
+                            materiaIds: []
+                        } as UsuarioConMaterias;
+                    }
+                })
+            );
+
+            setUsuarios(usuariosConMaterias);
+        } catch (error) {
+            console.error('Error al cargar usuarios:', error);
+            toast.error('Error al cargar usuarios');
+        }
     };
 
     const fetchMaterias = () => {
@@ -108,7 +132,7 @@ const DashboardEncargado: React.FC = () => {
         fetchMaterias();
     }, []);
 
-    const handleMateriaCheckbox = (id: number) => {
+    const handleMateriaCheckbox = (id: string) => {
         setSelectedMaterias(prev =>
             prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
         );
@@ -117,6 +141,13 @@ const DashboardEncargado: React.FC = () => {
     const handleSubmitUser = async (e: FormEvent) => {
         e.preventDefault();
         setUserError(null);
+
+        const isDuplicate = usuarios.some(u => u.codigoUsuario === userForm.codigoUsuario && (!editingUser || u.idUsuario !== editingUser.idUsuario));
+        if (isDuplicate) {
+            setUserError('Ya existe un usuario con ese código.');
+            return;
+        }
+
         const dto: UsuarioDTO = { ...userForm };
         try {
             const res = editingUser
@@ -127,22 +158,24 @@ const DashboardEncargado: React.FC = () => {
 
             if (editingUser) {
                 const prev = await listarMateriasPorUsuario(String(editingUser.idUsuario));
-                const prevIds = prev.data.map((m: any) => m.idMateria);
+                const prevNombres = prev.data.map((m: any) => m.nombreMateria);
 
+                // Eliminar asociaciones que ya no están seleccionadas
                 await Promise.all(
-                    prevIds
-                        .filter((id: string) => !selectedMaterias.includes(Number(id)))
-                        .map(id => eliminarAsociacion(id))
+                    prevNombres
+                        .filter((nombre: string) => !selectedMaterias.includes(nombre))
+                        .map(nombre => {
+                            // Buscar el idUsuarioXMateria para eliminar
+                            const materiaToDelete = prev.data.find((m: any) => m.nombreMateria === nombre);
+                            return materiaToDelete ? eliminarAsociacion(String(materiaToDelete.idUsuarioXMateria)) : Promise.resolve();
+                        })
                 );
             }
 
+            // Crear nuevas asociaciones
             await Promise.all(
-                selectedMaterias.map((id) => {
-                    const materia = materias.find(m => `${m.idMateria}` === `${id}`);
-                    if (materia) {
-                        return asociarUsuarioConMateria(userForm.codigoUsuario, materia.nombreMateria);
-                    }
-                    return Promise.resolve();
+                selectedMaterias.map((nombreMateria) => {
+                    return asociarUsuarioConMateria(dto.codigoUsuario, nombreMateria);
                 })
             );
 
@@ -165,14 +198,26 @@ const DashboardEncargado: React.FC = () => {
 
     const openEditUser = async (u: UsuarioConMaterias) => {
         setEditingUser(u);
-        setUserForm({ nombre: u.nombre, apellido: u.apellido, correo: u.correo, contrasena: '', rol: u.rol, codigoUsuario: u.codigoUsuario });
+        setUserForm({
+            nombre: u.nombre,
+            apellido: u.apellido,
+            correo: u.correo,
+            contrasena: '',
+            rol: u.rol,
+            codigoUsuario: u.codigoUsuario,
+        });
+
         try {
             const res = await listarMateriasPorUsuario(String(u.idUsuario));
-            const materiaIds = res.data.map((m: any) => Number(m.idMateria));
-            setSelectedMaterias(materiaIds);
-        } catch {
+            console.log('Materias del usuario para editar:', res.data);
+            
+            const materiaNombres = res.data.map((m: any) => m.nombreMateria);
+            setSelectedMaterias(materiaNombres);
+        } catch (error) {
+            console.error('Error obteniendo materias para editar:', error);
             setSelectedMaterias([]);
         }
+
         setUserError(null);
         setModalUserOpen(true);
     };
@@ -187,11 +232,18 @@ const DashboardEncargado: React.FC = () => {
             .catch(() => toast.error('Error al eliminar usuario'));
     };
 
-    // Gestión de materias
     const handleSubmitMat = (e: FormEvent) => {
         e.preventDefault();
         setMatError(null);
+
         const nombre = matForm.nombreMateria.trim();
+        const exists = materias.some(m => m.nombreMateria.toLowerCase() === nombre.toLowerCase() && (!editingMat || m.idMateria !== editingMat.idMateria));
+
+        if (exists) {
+            setMatError('Ya existe una materia con ese nombre.');
+            return;
+        }
+
         const action = editingMat ? actualizarMateria(editingMat.idMateria, nombre) : crearMateria(nombre);
         action
             .then(() => {
@@ -227,6 +279,16 @@ const DashboardEncargado: React.FC = () => {
                 fetchMaterias();
             })
             .catch(() => toast.error('Error al eliminar materia'));
+    };
+
+    // Función para obtener los nombres de las materias de un usuario
+    const getMateriasNombres = (usuario: UsuarioConMaterias): string => {
+        if (!usuario.materiaIds || usuario.materiaIds.length === 0) {
+            return 'Sin materias asignadas';
+        }
+        
+        // Ahora materiaIds contiene los nombres directamente
+        return usuario.materiaIds.join(', ');
     };
 
     return (
@@ -271,9 +333,7 @@ const DashboardEncargado: React.FC = () => {
                                     <td className="px-3 py-2">{u.rol}</td>
                                     <td className="px-3 py-2">{u.codigoUsuario}</td>
                                     <td className="px-3 py-2">
-                                        {u.materiaIds
-                                            .map(id => materias.find(m => m.idMateria === id)?.nombreMateria)
-                                            .join(', ')}
+                                        {getMateriasNombres(u)}
                                     </td>
                                     <td className="px-3 py-2 flex gap-2">
                                         <button onClick={() => openEditUser(u)} className="text-blue-600"><Edit2 size={16} /></button>
@@ -283,7 +343,7 @@ const DashboardEncargado: React.FC = () => {
                             ))}
                             {paginatedUsuarios.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="py-4 text-center text-gray-500">
+                                    <td colSpan={6} className="py-4 text-center text-gray-500">
                                         No hay usuarios.
                                     </td>
                                 </tr>
@@ -391,9 +451,9 @@ const DashboardEncargado: React.FC = () => {
                                     <label key={m.idMateria} className="flex items-center space-x-2">
                                         <input
                                             type="checkbox"
-                                            checked={selectedMaterias.includes(Number(m.idMateria))}
-                                            value={m.idMateria}
-                                            onChange={e => handleMateriaCheckbox(Number(e.currentTarget.value))}
+                                            checked={selectedMaterias.includes(m.nombreMateria)}
+                                            value={m.nombreMateria}
+                                            onChange={e => handleMateriaCheckbox(e.currentTarget.value)}
                                         />
                                         <span>{m.nombreMateria}</span>
                                     </label>
