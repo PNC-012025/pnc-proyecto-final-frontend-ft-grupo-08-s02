@@ -11,9 +11,12 @@ import RegistroPageEncargado from '../pages/Registros/RegistroPageEncargado';
 import ValidacionesPage from '../pages/Validaciones/Validaciones';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
+
+    if (loading) return <div className="p-8 text-center">Cargando...</div>; 
     return user ? children : <Navigate to="/login" replace />;
 };
+
 
 const DashboardRouter: React.FC = () => {
     const { user } = useAuth();
