@@ -4,24 +4,27 @@ import { Dialog } from '@headlessui/react';
 import useAuth from '../../hooks/useAuth';
 import { calcularHorasEfectivas } from '../../utils/timeUtils';
 import { listarMateriasPorUsuario } from '../../services/usuarioMateriaService';
+import { listarMaterias } from '../../services/materiaService';
 import {
     listarRegistrosPorUsuarioYFechas,
     crearRegistroHora,
     actualizarRegistroHora,
     eliminarRegistro,
 } from '../../services/registroHoraService';
-import type { Materia, RegistroHora, RegistroDTO } from '../../types';
+import type { Materia, RegistroHora, RegistroDTO, MateriaUsuario } from '../../types';
 
 const DashboardEstudiante: React.FC = () => {
     const { user } = useAuth();
-    const userId = user?.codigoUsuario ?? '';
+    const userId = user?.idUsuario ?? '';
+    const userCode = user?.codigoUsuario ?? '';
 
     // State
     const [materias, setMaterias] = useState<Materia[]>([]);
-    const [materiaSel, setMateriaSel] = useState<string>('');
     const [registros, setRegistros] = useState<RegistroHora[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<RegistroHora | null>(null);
+    const [loadingMaterias, setLoadingMaterias] = useState(true);
+    const [errorMaterias, setErrorMaterias] = useState<string | null>(null);
     const [form, setForm] = useState<{
         fechaRegistro: string;
         horaInicio: string;
@@ -41,15 +44,40 @@ const DashboardEstudiante: React.FC = () => {
     });
 
     // Load materias
-    const loadMaterias = useCallback(() => {
-        listarMateriasPorUsuario(userId)
-            .then(res => {
-                const data = res.data as Materia[];
-                setMaterias(data);
-                setMateriaSel(data[0]?.idMateria ?? '');
-            })
-            .catch(console.error);
-    }, [userId]);
+    const loadMaterias = useCallback(async () => {
+        console.log('Cargando materias para usuario:', userId);
+        console.log('Código de usuario:', userCode);
+        console.log('Usuario completo:', user);
+        setLoadingMaterias(true);
+        setErrorMaterias(null);
+        
+        try {
+            // Obtener todas las materias
+            const todasLasMateriasRes = await listarMaterias();
+            const todasLasMaterias = todasLasMateriasRes.data;
+            console.log('Todas las materias:', todasLasMaterias);
+            
+            // Obtener las materias asignadas al usuario
+            console.log('Llamando a listarMateriasPorUsuario con userId:', userId);
+            const materiasUsuarioRes = await listarMateriasPorUsuario(String(userId));
+            const materiasUsuario = materiasUsuarioRes.data;
+            console.log('Respuesta completa de materias del usuario:', materiasUsuarioRes);
+            console.log('Materias del usuario:', materiasUsuario);
+            
+            // Filtrar las materias que están asignadas al usuario
+            const materiasAsignadas = todasLasMaterias.filter(materia => 
+                materiasUsuario.some((m: MateriaUsuario) => m.nombreMateria === materia.nombreMateria)
+            );
+            
+            console.log('Materias asignadas procesadas:', materiasAsignadas);
+            setMaterias(materiasAsignadas);
+        } catch (error) {
+            console.error('Error cargando materias:', error);
+            setErrorMaterias('Error al cargar las materias asignadas');
+        } finally {
+            setLoadingMaterias(false);
+        }
+    }, [userId, userCode, user]);
 
     useEffect(() => {
         loadMaterias();
@@ -57,25 +85,19 @@ const DashboardEstudiante: React.FC = () => {
 
     // Load registros
     const loadRegistros = useCallback(() => {
-        listarRegistrosPorUsuarioYFechas(userId, '1900-01-01', '2099-12-31')
+        listarRegistrosPorUsuarioYFechas(userCode, '1900-01-01', '2099-12-31')
             .then(res => setRegistros(res.data as RegistroHora[]))
-            .catch(console.error);
-    }, [userId]);
+            .catch(error => {
+                console.error('Error cargando registros:', error);
+            });
+    }, [userCode]);
 
     useEffect(() => {
         loadRegistros();
     }, [loadRegistros]);
 
-    // Cuando cambie materia seleccionada, actualizo idFormulario en el form
-    useEffect(() => {
-        setForm(f => ({ ...f, idFormulario: materiaSel }));
-    }, [materiaSel]);
-
     // Filtrado de pendientes
-    const pendientes = registros.filter(r =>
-        r.estado === 'PENDIENTE' &&
-        (!materiaSel || r.idFormulario === materiaSel)
-    );
+    const pendientes = registros.filter(r => r.estado === 'PENDIENTE');
 
     // Crear o actualizar
     const handleSubmit = (e: FormEvent) => {
@@ -88,7 +110,7 @@ const DashboardEstudiante: React.FC = () => {
             horaFin: form.horaFin,
             horasEfectivas: horas,
             aula: form.aula,
-            codigoUsuario: userId,
+            codigoUsuario: userCode,
             idActividad: form.idActividad,
             idFormulario: form.idFormulario,
         };
@@ -114,17 +136,25 @@ const DashboardEstudiante: React.FC = () => {
                     actividad: '',
                     aula: '',
                     idActividad: '',
-                    idFormulario: materiaSel,
+                    idFormulario: '',
                 });
             })
-            .catch(console.error);
+            .catch(error => {
+                console.error('Error al guardar registro:', error);
+                alert('Error al guardar el registro. Por favor, inténtalo de nuevo.');
+            });
     };
 
     // Borrar
     const handleDelete = (id: string) => {
+        if (!confirm('¿Estás seguro de eliminar este registro?')) return;
+        
         eliminarRegistro(id)
             .then(() => setRegistros(prev => prev.filter(r => r.idRegistro !== id)))
-            .catch(console.error);
+            .catch(error => {
+                console.error('Error eliminando registro:', error);
+                alert('Error al eliminar el registro. Por favor, inténtalo de nuevo.');
+            });
     };
 
     // Editar
@@ -145,22 +175,6 @@ const DashboardEstudiante: React.FC = () => {
 
     return (
         <div className="space-y-8 p-4">
-            {/* Selector de materia */}
-            <div className="flex items-center gap-2">
-                <label className="font-medium">Materia:</label>
-                <select
-                    value={materiaSel}
-                    onChange={e => setMateriaSel(e.target.value)}
-                    className="border rounded px-3 py-2"
-                >
-                    {materias.map(m => (
-                        <option key={m.idMateria} value={m.idMateria}>
-                            {m.nombreMateria}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
             {/* Tabla de pendientes */}
             <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-center mb-4">
@@ -168,8 +182,24 @@ const DashboardEstudiante: React.FC = () => {
                         Mis registros pendientes
                     </h2>
                     <button
-                        onClick={() => setModalOpen(true)}
-                        className="flex items-center gap-2 text-sm text-white bg-[#003c71] px-4 py-2 rounded"
+                        onClick={() => {
+                            setForm({
+                                fechaRegistro: '',
+                                horaInicio: '',
+                                horaFin: '',
+                                actividad: '',
+                                aula: '',
+                                idActividad: '',
+                                idFormulario: '',
+                            });
+                            setModalOpen(true);
+                        }}
+                        disabled={loadingMaterias || !!errorMaterias || materias.length === 0}
+                        className={`flex items-center gap-2 text-sm px-4 py-2 rounded ${
+                            !loadingMaterias && !errorMaterias && materias.length > 0
+                                ? 'text-white bg-[#003c71] hover:bg-[#002f59]' 
+                                : 'text-gray-400 bg-gray-200 cursor-not-allowed'
+                        }`}
                     >
                         <Plus size={16} /> Nuevo registro
                     </button>
@@ -188,7 +218,31 @@ const DashboardEstudiante: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {pendientes.length ? pendientes.map(reg => (
+                        {loadingMaterias ? (
+                            <tr>
+                                <td colSpan={8} className="py-4 text-center text-gray-500">
+                                    Cargando materias...
+                                </td>
+                            </tr>
+                        ) : errorMaterias ? (
+                            <tr>
+                                <td colSpan={8} className="py-4 text-center">
+                                    <div className="text-red-600 text-sm">{errorMaterias}</div>
+                                    <button
+                                        onClick={loadMaterias}
+                                        className="text-sm text-blue-600 hover:underline mt-2"
+                                    >
+                                        Reintentar
+                                    </button>
+                                </td>
+                            </tr>
+                        ) : materias.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="py-4 text-center text-red-600 text-sm">
+                                    No tienes materias asignadas. Contacta al encargado.
+                                </td>
+                            </tr>
+                        ) : pendientes.length ? pendientes.map(reg => (
                             <tr key={reg.idRegistro} className="border-b hover:bg-gray-50">
                                 <td className="py-2">{reg.fechaRegistro}</td>
                                 <td>{reg.horaInicio}</td>
@@ -251,6 +305,19 @@ const DashboardEstudiante: React.FC = () => {
                                 required
                             />
                         </div>
+                        <select
+                            className="w-full border rounded px-3 py-2"
+                            value={form.idFormulario}
+                            onChange={e => setForm(f => ({ ...f, idFormulario: e.target.value }))}
+                            required
+                        >
+                            <option value="">Seleccionar materia</option>
+                            {materias.map(m => (
+                                <option key={m.idMateria} value={m.idMateria}>
+                                    {m.nombreMateria}
+                                </option>
+                            ))}
+                        </select>
                         <input
                             type="text"
                             placeholder="Actividad"

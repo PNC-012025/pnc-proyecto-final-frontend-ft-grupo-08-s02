@@ -50,6 +50,13 @@ export interface Materia {
     nombreMateria: string;
 }
 
+// Respuesta del servicio de materias por usuario
+export interface MateriaUsuario {
+    idUsuarioXMateria: string;
+    nombreMateria: string;
+    idMateria?: string;
+}
+
 // DTO para crear/actualizar una actividad
 export interface ActividadDTO {
     nombreActividad: string;
