@@ -1,55 +1,47 @@
-import React, { createContext, useState, useEffect } from 'react'
-import type { ReactNode } from 'react'
-import { loginRequest } from '../services/authService'
-import api from '../services/api'
-import type { UsuarioLoginDTO, Usuario } from '../types'
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { Usuario, UsuarioLoginDTO } from '../types';
+import { login as loginRequest } from '../services/authService';
 
-interface AuthContextValue {
-  user: Usuario | null
-  signin: (data: UsuarioLoginDTO) => Promise<void>
-  signout: () => void
+export interface AuthContextProps {
+  user: Usuario | null;
+  signin: (creds: UsuarioLoginDTO) => Promise<void>;
+  signout: () => void;
 }
 
-export const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  signin: async () => { },
-  signout: () => { }
-})
+const AuthContext = createContext<AuthContextProps>({} as AuthContextProps);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<Usuario | null>(null)
+  const [user, setUser] = useState<Usuario | null>(null);
+  const navigate = useNavigate();
 
-  // Al montar, cargamos de localStorage
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    const usr = localStorage.getItem('user')
-    if (token && usr) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`
-      setUser(JSON.parse(usr))
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    if (token && storedUser) {
+      setUser(JSON.parse(storedUser));
     }
-  }, [])
+  }, []);
 
-  const signin = async (data: UsuarioLoginDTO) => {
-    const res = await loginRequest(data)
-    const { token, usuario } = res.data
-    // Persistimos
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(usuario))
-    // Configuramos axios
-    api.defaults.headers.common.Authorization = `Bearer ${token}`
-    setUser(usuario)
-  }
+  const signin = async (creds: UsuarioLoginDTO) => {
+    const res = await loginRequest(creds);
+    const token = res.data.result;
+    localStorage.setItem('token', token);
+    navigate('/dashboard');
+  };
 
   const signout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    delete api.defaults.headers.common.Authorization
-    setUser(null)
-  }
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    navigate('/login');
+  };
 
   return (
     <AuthContext.Provider value={{ user, signin, signout }}>
       {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};
+
+export default AuthContext;

@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-    BrowserRouter,
-    Routes,
-    Route,
-    Navigate,
-} from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import Login from '../pages/Login/Login';
 import useAuth from '../hooks/useAuth';
@@ -29,35 +24,26 @@ const DashboardRouter: React.FC = () => {
 };
 
 const AppRoutes: React.FC = () => (
-    <BrowserRouter>
-        <Routes>
-            <Route path="/login" element={<Login />} />
+    <Routes>
+        <Route path="/login" element={<Login />} />
 
-            <Route
-                path="/dashboard/*"
-                element={
-                    <PrivateRoute>
-                        <Layout />
-                    </PrivateRoute>
-                }
-            >
-                {/* Página principal según rol */}
-                <Route index element={<DashboardRouter />} />
-
-                {/* Rutas compartidas */}
-                <Route path="registros" element={<RegistrosPage />} />
-
-                {/* Encargado */}
-                <Route path="validaciones" element={<ValidacionesPage />} />
-                <Route path="historico" element={<RegistroPageEncargado />} />
-
-                {/* Cualquier otra → al login */}
-                <Route path="*" element={<Navigate to="/login" replace />} />
-            </Route>
-
+        <Route
+            path="/dashboard/*"
+            element={
+                <PrivateRoute>
+                    <Layout />
+                </PrivateRoute>
+            }
+        >
+            <Route index element={<DashboardRouter />} />
+            <Route path="registros" element={<RegistrosPage />} />
+            <Route path="validaciones" element={<ValidacionesPage />} />
+            <Route path="historico" element={<RegistroPageEncargado />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-    </BrowserRouter>
+        </Route>
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
 );
 
 export default AppRoutes;

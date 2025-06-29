@@ -1,15 +1,19 @@
 // src/pages/Login/Login.tsx
 import React, { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import useAuth from '../../hooks/AuthContext';
+import { Link } from 'react-router-dom';
+import useAuth from '../../hooks/useAuth';
 import { User, Lock } from 'lucide-react';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
-import type { UsuarioLoginDTO } from '../../types';
 
 import img1 from '../../assets/login/DEI.jpg';
 import img2 from '../../assets/login/edificio.jpg';
 import img3 from '../../assets/login/Mural.jpg';
+
+interface FormValues {
+    carnet: string;
+    password: string;
+}
 
 const slides = [
     {
@@ -30,14 +34,10 @@ const slides = [
 ];
 
 const Login: React.FC = () => {
-    const [values, setValues] = useState<UsuarioLoginDTO>({
-        email: '',
-        password: '',
-    });
+    const [values, setValues] = useState<FormValues>({ carnet: '', password: '' });
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const { signin } = useAuth();
-    const navigate = useNavigate();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -48,11 +48,13 @@ const Login: React.FC = () => {
         e.preventDefault();
         setError(null);
         setLoading(true);
+
+        const email = `${values.carnet.trim()}@uca.edu.sv`;
         try {
-            await signin(values);
-            navigate('/dashboard');
+            await signin({ email, password: values.password });
+            // signin() ya hace navigate al dashboard
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Email o contraseña inválidos');
+            setError(err.response?.data?.message || 'Credenciales inválidas');
         } finally {
             setLoading(false);
         }
@@ -60,7 +62,7 @@ const Login: React.FC = () => {
 
     return (
         <div className="min-h-screen flex flex-col lg:flex-row font-sans">
-            {/* Carrusel lado izquierdo */}
+            {/* Carrusel - lado izquierdo */}
             <div className="relative hidden lg:flex lg:w-[55%] bg-black shadow-xl">
                 <Carousel
                     autoPlay
@@ -69,7 +71,6 @@ const Login: React.FC = () => {
                     showStatus={false}
                     interval={5000}
                     showArrows={false}
-                    showIndicators
                     swipeable
                     className="w-full h-screen"
                 >
@@ -77,7 +78,7 @@ const Login: React.FC = () => {
                         <div key={i} className="relative w-full h-full">
                             <img
                                 src={slide.image}
-                                alt={`slide-${i}`}
+                                alt={slide.title}
                                 className="object-cover w-full h-screen opacity-75"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
@@ -94,6 +95,7 @@ const Login: React.FC = () => {
             {/* Panel de Login */}
             <div className="flex w-full lg:w-[45%] items-center justify-center p-6 bg-gray-50">
                 <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-2xl space-y-8 animate-fadeIn">
+                    {/* Header del formulario */}
                     <div className="text-center space-y-2">
                         <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-[#003c71] to-[#00509e] flex items-center justify-center shadow-md">
                             <User className="text-white" size={28} />
@@ -111,23 +113,27 @@ const Login: React.FC = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Email */}
+                        {/* Carnet + dominio fijo */}
                         <div className="relative flex items-center">
                             <User className="absolute left-3 text-gray-400" size={20} />
                             <input
-                                type="email"
-                                name="email"
-                                value={values.email}
+                                type="text"
+                                name="carnet"
+                                value={values.carnet}
                                 onChange={handleChange}
                                 required
-                                placeholder="Email"
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
+                                placeholder="Carnet"
+                                className="w-full pl-10 pr-24 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003c71] shadow-sm"
                             />
+                            <span className="absolute right-4 text-gray-500">@uca.edu.sv</span>
                         </div>
 
-                        {/* Password */}
+                        {/* Contraseña */}
                         <div className="relative">
-                            <Lock className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={20} />
+                            <Lock
+                                className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
+                                size={20}
+                            />
                             <input
                                 type="password"
                                 name="password"
