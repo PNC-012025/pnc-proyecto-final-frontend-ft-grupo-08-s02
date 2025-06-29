@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (location.pathname !== '/login') navigate('/login');
         }
       }
-      setLoading(false); // ← MARCA QUE TERMINÓ
+      setLoading(false); 
     };
 
     verifyToken();

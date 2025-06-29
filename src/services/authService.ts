@@ -11,3 +11,5 @@ interface LoginResponseAPI {
 export function login(creds: UsuarioLoginDTO) {
   return api.post<LoginResponseAPI>(endpoints.auth, creds);
 }
+
+

@@ -11,6 +11,11 @@ import {
     actualizarMateria,
     eliminarMateria
 } from '../../services/materiaService';
+import {
+    asociarUsuarioConMateria,
+    eliminarAsociacion,
+    listarMateriasPorUsuario
+} from '../../services/usuarioMateriaService';
 import type {
     UsuarioConMaterias,
     UsuarioDTO,
@@ -39,6 +44,9 @@ const DashboardEncargado: React.FC = () => {
     });
     const [userError, setUserError] = useState<string | null>(null);
 
+    const [materiaSearch, setMateriaSearch] = useState('');
+    const [selectedMaterias, setSelectedMaterias] = useState<number[]>([]);
+
     const [searchMateria, setSearchMateria] = useState('');
     const [matPage, setMatPage] = useState(1);
     const [materias, setMaterias] = useState<Materia[]>([]);
@@ -48,19 +56,51 @@ const DashboardEncargado: React.FC = () => {
     const [matForm, setMatForm] = useState<{ nombreMateria: string }>({ nombreMateria: '' });
     const [matError, setMatError] = useState<string | null>(null);
 
+    // Filtrado y paginación de usuarios
+    const filteredUsuarios = useMemo(() => {
+        return usuarios.filter(u =>
+            (`${u.nombre} ${u.apellido}`.toLowerCase().includes(searchUsuario.toLowerCase()))
+        );
+    }, [usuarios, searchUsuario]);
+
+    const userPageCount = useMemo(() => {
+        return Math.ceil(filteredUsuarios.length / ITEMS_PER_PAGE) || 1;
+    }, [filteredUsuarios]);
+
+    const paginatedUsuarios = useMemo(() => {
+        const start = (userPage - 1) * ITEMS_PER_PAGE;
+        return filteredUsuarios.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredUsuarios, userPage]);
+
+    // Filtrado y paginación de materias
+    const filteredMaterias = useMemo(() => {
+        return materias.filter(m =>
+            m.nombreMateria.toLowerCase().includes(searchMateria.toLowerCase())
+        );
+    }, [materias, searchMateria]);
+
+    const matPageCount = useMemo(() => {
+        return Math.ceil(filteredMaterias.length / ITEMS_PER_PAGE) || 1;
+    }, [filteredMaterias]);
+
+    const paginatedMaterias = useMemo(() => {
+        const start = (matPage - 1) * ITEMS_PER_PAGE;
+        return filteredMaterias.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredMaterias, matPage]);
+
     const fetchUsuarios = () => {
         listarUsuarios()
             .then(res => {
                 const data = res.data.map(u => ({ ...u, materiaIds: [] }));
                 setUsuarios(data);
             })
-            .catch(err => toast.error('Error al cargar usuarios'));
+            .catch(() => toast.error('Error al cargar usuarios'));
     };
 
     const fetchMaterias = () => {
         listarMaterias()
             .then(res => setMaterias(res.data))
-            .catch(err => toast.error('Error al cargar materias'));
+            .catch(() => toast.error('Error al cargar materias'));
     };
 
     useEffect(() => {
@@ -68,62 +108,75 @@ const DashboardEncargado: React.FC = () => {
         fetchMaterias();
     }, []);
 
-    const filteredUsuarios = useMemo(() => {
-        const term = searchUsuario.toLowerCase();
-        return usuarios.filter(u =>
-            (`${u.nombre} ${u.apellido}`.toLowerCase().includes(term)) ||
-            u.correo.toLowerCase().includes(term) ||
-            u.codigoUsuario.toLowerCase().includes(term)
+    const handleMateriaCheckbox = (id: number) => {
+        setSelectedMaterias(prev =>
+            prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
         );
-    }, [searchUsuario, usuarios]);
-    const userPageCount = Math.max(1, Math.ceil(filteredUsuarios.length / ITEMS_PER_PAGE));
-    const paginatedUsuarios = filteredUsuarios.slice((userPage - 1) * ITEMS_PER_PAGE, userPage * ITEMS_PER_PAGE);
+    };
 
-    const filteredMaterias = useMemo(() => {
-        const term = searchMateria.toLowerCase();
-        return materias.filter(m => m.nombreMateria.toLowerCase().includes(term));
-    }, [searchMateria, materias]);
-    const matPageCount = Math.max(1, Math.ceil(filteredMaterias.length / ITEMS_PER_PAGE));
-    const paginatedMaterias = filteredMaterias.slice((matPage - 1) * ITEMS_PER_PAGE, matPage * ITEMS_PER_PAGE);
+    const handleSubmitUser = async (e: FormEvent) => {
+        e.preventDefault();
+        setUserError(null);
+        const dto: UsuarioDTO = { ...userForm };
+        try {
+            const res = editingUser
+                ? await actualizarUsuario(editingUser.idUsuario, dto)
+                : await crearUsuario(dto);
+
+            const usuarioId = res.data.idUsuario;
+
+            if (editingUser) {
+                const prev = await listarMateriasPorUsuario(String(editingUser.idUsuario));
+                const prevIds = prev.data.map((m: any) => m.idMateria);
+
+                await Promise.all(
+                    prevIds
+                        .filter((id: string) => !selectedMaterias.includes(Number(id)))
+                        .map(id => eliminarAsociacion(id))
+                );
+            }
+
+            await Promise.all(
+                selectedMaterias.map((id) => {
+                    const materia = materias.find(m => `${m.idMateria}` === `${id}`);
+                    if (materia) {
+                        return asociarUsuarioConMateria(userForm.codigoUsuario, materia.nombreMateria);
+                    }
+                    return Promise.resolve();
+                })
+            );
+
+            toast.success(editingUser ? 'Usuario actualizado con éxito' : 'Usuario creado exitosamente');
+            fetchUsuarios();
+            setModalUserOpen(false);
+        } catch (err: any) {
+            toast.error('Error al guardar usuario');
+            setUserError(err.response?.data?.message || err.message);
+        }
+    };
 
     const openNewUser = () => {
         setEditingUser(null);
         setUserForm({ nombre: '', apellido: '', correo: '', contrasena: '', rol: 'ENCARGADO', codigoUsuario: '' });
+        setSelectedMaterias([]);
         setUserError(null);
         setModalUserOpen(true);
     };
-    const openEditUser = (u: UsuarioConMaterias) => {
-        setEditingUser(u);
-        setUserForm({
-            nombre: u.nombre,
-            apellido: u.apellido,
-            correo: u.correo,
-            contrasena: '',
-            rol: u.rol,
-            codigoUsuario: u.codigoUsuario
-        });
-        setUserError(null);
-        setModalUserOpen(true);
-    };
-    const handleSubmitUser = (e: FormEvent) => {
-        e.preventDefault();
-        setUserError(null);
-        const dto: UsuarioDTO = { ...userForm };
-        const action = editingUser
-            ? actualizarUsuario(editingUser.idUsuario, dto)
-            : crearUsuario(dto);
 
-        action
-            .then(() => {
-                toast.success(editingUser ? 'Usuario actualizado con éxito' : 'Usuario creado exitosamente');
-                fetchUsuarios();
-                setModalUserOpen(false);
-            })
-            .catch(err => {
-                toast.error('Error al guardar usuario');
-                setUserError(err.response?.data?.message || err.message);
-            });
+    const openEditUser = async (u: UsuarioConMaterias) => {
+        setEditingUser(u);
+        setUserForm({ nombre: u.nombre, apellido: u.apellido, correo: u.correo, contrasena: '', rol: u.rol, codigoUsuario: u.codigoUsuario });
+        try {
+            const res = await listarMateriasPorUsuario(String(u.idUsuario));
+            const materiaIds = res.data.map((m: any) => Number(m.idMateria));
+            setSelectedMaterias(materiaIds);
+        } catch {
+            setSelectedMaterias([]);
+        }
+        setUserError(null);
+        setModalUserOpen(true);
     };
+
     const handleDeleteUser = (idUsuario: string) => {
         if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
         eliminarUsuario(idUsuario)
@@ -134,26 +187,12 @@ const DashboardEncargado: React.FC = () => {
             .catch(() => toast.error('Error al eliminar usuario'));
     };
 
-    const openNewMat = () => {
-        setEditingMat(null);
-        setMatForm({ nombreMateria: '' });
-        setMatError(null);
-        setModalMatOpen(true);
-    };
-    const openEditMat = (m: Materia) => {
-        setEditingMat(m);
-        setMatForm({ nombreMateria: m.nombreMateria });
-        setMatError(null);
-        setModalMatOpen(true);
-    };
+    // Gestión de materias
     const handleSubmitMat = (e: FormEvent) => {
         e.preventDefault();
         setMatError(null);
         const nombre = matForm.nombreMateria.trim();
-        const action = editingMat
-            ? actualizarMateria(editingMat.idMateria, nombre)
-            : crearMateria(nombre);
-
+        const action = editingMat ? actualizarMateria(editingMat.idMateria, nombre) : crearMateria(nombre);
         action
             .then(() => {
                 toast.success(editingMat ? 'Materia actualizada con éxito' : 'Materia creada exitosamente');
@@ -165,6 +204,21 @@ const DashboardEncargado: React.FC = () => {
                 setMatError(err.response?.data?.message || err.message);
             });
     };
+
+    const openNewMat = () => {
+        setEditingMat(null);
+        setMatForm({ nombreMateria: '' });
+        setMatError(null);
+        setModalMatOpen(true);
+    };
+
+    const openEditMat = (m: Materia) => {
+        setEditingMat(m);
+        setMatForm({ nombreMateria: m.nombreMateria });
+        setMatError(null);
+        setModalMatOpen(true);
+    };
+
     const handleDeleteMat = (id: string) => {
         if (!confirm('¿Estás seguro de eliminar esta materia?')) return;
         eliminarMateria(id)
@@ -177,7 +231,7 @@ const DashboardEncargado: React.FC = () => {
 
     return (
         <div className="space-y-8 p-4">
-             {/* Gestión de Usuarios */}
+            {/* Gestión de Usuarios */}
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
                 <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold text-[#003c71]">Gestión de Usuarios</h2>
@@ -205,6 +259,7 @@ const DashboardEncargado: React.FC = () => {
                                 <th className="px-3 py-2">Email</th>
                                 <th className="px-3 py-2">Rol</th>
                                 <th className="px-3 py-2">Código</th>
+                                <th className="px-3 py-2">Materias</th>
                                 <th className="px-3 py-2">Acciones</th>
                             </tr>
                         </thead>
@@ -215,6 +270,11 @@ const DashboardEncargado: React.FC = () => {
                                     <td className="px-3 py-2">{u.correo}</td>
                                     <td className="px-3 py-2">{u.rol}</td>
                                     <td className="px-3 py-2">{u.codigoUsuario}</td>
+                                    <td className="px-3 py-2">
+                                        {u.materiaIds
+                                            .map(id => materias.find(m => m.idMateria === id)?.nombreMateria)
+                                            .join(', ')}
+                                    </td>
                                     <td className="px-3 py-2 flex gap-2">
                                         <button onClick={() => openEditUser(u)} className="text-blue-600"><Edit2 size={16} /></button>
                                         <button onClick={() => handleDeleteUser(String(u.idUsuario))} className="text-red-600"><Trash2 size={16} /></button>
@@ -299,7 +359,6 @@ const DashboardEncargado: React.FC = () => {
                 </div>
             </div>
 
-            {/* Modales */}
             {modalUserOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                     <div className="bg-white rounded-lg p-6 w-full max-w-md relative">
@@ -318,6 +377,28 @@ const DashboardEncargado: React.FC = () => {
                             {!editingUser && (
                                 <input type="password" placeholder="Contraseña" value={userForm.contrasena} onChange={e => setUserForm(f => ({ ...f, contrasena: e.target.value }))} required className="w-full border rounded px-3 py-2" />
                             )}
+                            <input
+                                type="text"
+                                placeholder="Buscar materia..."
+                                value={materiaSearch}
+                                onChange={(e) => setMateriaSearch(e.target.value)}
+                                className="w-full border rounded px-3 py-2 mt-4"
+                            />
+                            <div className="max-h-40 overflow-y-auto border rounded p-2">
+                                {materias.filter((m) =>
+                                    m.nombreMateria.toLowerCase().includes(materiaSearch.toLowerCase())
+                                ).map((m) => (
+                                    <label key={m.idMateria} className="flex items-center space-x-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedMaterias.includes(Number(m.idMateria))}
+                                            value={m.idMateria}
+                                            onChange={e => handleMateriaCheckbox(Number(e.currentTarget.value))}
+                                        />
+                                        <span>{m.nombreMateria}</span>
+                                    </label>
+                                ))}
+                            </div>
                             {userError && <p className="text-red-600 text-sm">{userError}</p>}
                             <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded">Guardar</button>
                         </form>

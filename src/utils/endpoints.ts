@@ -1,7 +1,7 @@
 const baseURL = import.meta.env.VITE_API_URL || '';
 
 export default {
- 
+
     auth: '/api/auth/login',
 
     usuarios: '/api/usuarios/list',
