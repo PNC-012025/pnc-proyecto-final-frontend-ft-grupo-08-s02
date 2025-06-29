@@ -32,18 +32,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const user = userRes.data;
           localStorage.setItem('user', JSON.stringify(user));
           setUser(user);
-        } catch (err) {
+        } catch (err: any) {
+          console.error('Error verificando token:', err);
+          // Limpiar datos de sesión
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setUser(null);
-          if (location.pathname !== '/login') navigate('/login');
+          
+          // Solo redirigir si no estamos ya en login y no es un error de red
+          if (location.pathname !== '/login' && err.response?.status !== 0) {
+            navigate('/login');
+          }
         }
       }
       setLoading(false); 
     };
 
     verifyToken();
-  }, []);
+  }, [navigate, location.pathname]);
 
   const signin = async (creds: UsuarioLoginDTO) => {
     try {

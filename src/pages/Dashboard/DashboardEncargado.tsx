@@ -14,7 +14,8 @@ import {
 import {
     asociarUsuarioConMateria,
     eliminarAsociacion,
-    listarMateriasPorUsuario
+    listarMateriasPorUsuario,
+    listarUsuariosPorMateria
 } from '../../services/usuarioMateriaService';
 import type {
     UsuarioConMaterias,
@@ -222,14 +223,51 @@ const DashboardEncargado: React.FC = () => {
         setModalUserOpen(true);
     };
 
-    const handleDeleteUser = (idUsuario: string) => {
+    const handleDeleteUser = async (idUsuario: string) => {
         if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
-        eliminarUsuario(idUsuario)
-            .then(() => {
-                toast.success('Usuario eliminado correctamente');
-                fetchUsuarios();
-            })
-            .catch(() => toast.error('Error al eliminar usuario'));
+        
+        try {
+            // Primero intentar eliminar directamente
+            await eliminarUsuario(idUsuario);
+            toast.success('Usuario eliminado correctamente');
+            fetchUsuarios();
+        } catch (error: any) {
+            console.error('Error al eliminar usuario:', error);
+            
+            if (error.response?.status === 409) {
+                // Si hay conflicto, preguntar si quiere desasignar todas las materias
+                const confirmDesasignar = confirm(
+                    'No se puede eliminar este usuario porque tiene materias asignadas. ¿Desea desasignar todas las materias y luego eliminar el usuario?'
+                );
+                
+                if (confirmDesasignar) {
+                    try {
+                        // Obtener las materias asignadas
+                        const materiasRes = await listarMateriasPorUsuario(idUsuario);
+                        const materiasAsignadas = materiasRes.data;
+                        
+                        // Desasignar todas las materias
+                        await Promise.all(
+                            materiasAsignadas.map((materia: any) => 
+                                eliminarAsociacion(String(materia.idUsuarioXMateria))
+                            )
+                        );
+                        
+                        // Ahora intentar eliminar el usuario
+                        await eliminarUsuario(idUsuario);
+                        toast.success('Usuario eliminado correctamente después de desasignar materias');
+                        fetchUsuarios();
+                    } catch (desasignarError: any) {
+                        console.error('Error al desasignar materias:', desasignarError);
+                        toast.error('Error al desasignar materias: ' + (desasignarError.response?.data?.message || desasignarError.message));
+                    }
+                }
+            } else if (error.response?.status === 401 || error.response?.status === 403) {
+                toast.error('Sesión expirada. Por favor, inicie sesión nuevamente.');
+            } else {
+                toast.error('Error al eliminar usuario: ' + (error.response?.data?.message || error.message));
+            }
+        }
     };
 
     const handleSubmitMat = (e: FormEvent) => {
@@ -271,14 +309,59 @@ const DashboardEncargado: React.FC = () => {
         setModalMatOpen(true);
     };
 
-    const handleDeleteMat = (id: string) => {
+    const handleDeleteMat = async (id: string) => {
         if (!confirm('¿Estás seguro de eliminar esta materia?')) return;
-        eliminarMateria(id)
-            .then(() => {
-                toast.success('Materia eliminada correctamente');
-                fetchMaterias();
-            })
-            .catch(() => toast.error('Error al eliminar materia'));
+        
+        try {
+            // Primero intentar eliminar directamente
+            await eliminarMateria(id);
+            toast.success('Materia eliminada correctamente');
+            fetchMaterias();
+        } catch (error: any) {
+            console.error('Error al eliminar materia:', error);
+            
+            if (error.response?.status === 409) {
+                // Si hay conflicto, preguntar si quiere desasignar todos los usuarios
+                const confirmDesasignar = confirm(
+                    'No se puede eliminar esta materia porque tiene usuarios asignados. ¿Desea desasignar todos los usuarios y luego eliminar la materia?'
+                );
+                
+                if (confirmDesasignar) {
+                    try {
+                        // Obtener los usuarios asignados a esta materia
+                        const usuariosRes = await listarUsuariosPorMateria(id);
+                        const usuariosAsignados = usuariosRes.data;
+                        
+                        // Para cada usuario, obtener sus materias y desasignar esta materia específica
+                        await Promise.all(
+                            usuariosAsignados.map(async (usuario: any) => {
+                                const materiasRes = await listarMateriasPorUsuario(String(usuario.idUsuario));
+                                const materiaToDelete = materiasRes.data.find((m: any) => 
+                                    m.nombreMateria === materias.find(mat => String(mat.idMateria) === id)?.nombreMateria
+                                );
+                                if (materiaToDelete) {
+                                    return eliminarAsociacion(String(materiaToDelete.idUsuarioXMateria));
+                                }
+                                return Promise.resolve();
+                            })
+                        );
+                        
+                        // Ahora intentar eliminar la materia
+                        await eliminarMateria(id);
+                        toast.success('Materia eliminada correctamente después de desasignar usuarios');
+                        fetchMaterias();
+                        fetchUsuarios(); // También refrescar usuarios
+                    } catch (desasignarError: any) {
+                        console.error('Error al desasignar usuarios:', desasignarError);
+                        toast.error('Error al desasignar usuarios: ' + (desasignarError.response?.data?.message || desasignarError.message));
+                    }
+                }
+            } else if (error.response?.status === 401 || error.response?.status === 403) {
+                toast.error('Sesión expirada. Por favor, inicie sesión nuevamente.');
+            } else {
+                toast.error('Error al eliminar materia: ' + (error.response?.data?.message || error.message));
+            }
+        }
     };
 
     // Función para obtener los nombres de las materias de un usuario
