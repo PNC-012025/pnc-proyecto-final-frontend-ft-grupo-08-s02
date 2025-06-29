@@ -43,7 +43,7 @@ const signin = async (creds: UsuarioLoginDTO) => {
       const decodedPayload = JSON.parse(atob(payloadBase64));
       const userId = decodedPayload.id;
 
-      // obtener los datos del usuario
+      // Llamar al backend para obtener los datos del usuario
       const userRes = await api.get(`/api/usuarios/data/${userId}`);
       const user = userRes.data;
 

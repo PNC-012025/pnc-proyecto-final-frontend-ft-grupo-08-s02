@@ -6,7 +6,7 @@ export default {
 
     usuarios: '/api/usuarios/list',
     usuarioById: '/api/usuarios/data',
-    saveUsuario: '/api/usuarios/save',
+    saveUsuario: '/api/save',
     updateUsuario: '/api/usuarios/update',
     deleteUsuario: '/api/usuarios/delete',
 

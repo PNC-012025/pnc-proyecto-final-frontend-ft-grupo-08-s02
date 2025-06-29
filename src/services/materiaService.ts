@@ -2,14 +2,22 @@ import api from './api';
 import endpoints from '../utils/endpoints';
 import type { MateriaDTO, Materia } from '../types';
 
-export const listarMaterias = () =>
-    api.get<Materia[]>(endpoints.materias);
+// Obtener todas las materias
+export const listarMaterias = () => {
+    return api.get<Materia[]>(endpoints.materias);
+};
 
-export const crearMateria = (nombre: string) =>
-    api.post<Materia>(endpoints.materias, { nombre });
+// Crear materia
+export const crearMateria = (nombreMateria: string) => {
+    return api.post<Materia>(endpoints.materias, { nombreMateria });
+};
 
-export const actualizarMateria = (id: string, nombre: string) =>
-    api.put<Materia>(`${endpoints.updateMateria}/${id}`, { nombre });
+// Actualizar materia
+export const actualizarMateria = (id: string, nombreMateria: string) => {
+    return api.put<Materia>(`${endpoints.updateMateria}/${id}`, { nombreMateria });
+};
 
-export const eliminarMateria = (id: string) =>
-    api.delete<void>(`${endpoints.deleteMateria}/${id}`);
+// Eliminar materia
+export const eliminarMateria = (id: string) => {
+    return api.delete<void>(`${endpoints.deleteMateria}/${id}`);
+};
