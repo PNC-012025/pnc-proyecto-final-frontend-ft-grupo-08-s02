@@ -45,9 +45,6 @@ const DashboardEstudiante: React.FC = () => {
 
     // Load materias
     const loadMaterias = useCallback(async () => {
-        console.log('Cargando materias para usuario:', userId);
-        console.log('Código de usuario:', userCode);
-        console.log('Usuario completo:', user);
         setLoadingMaterias(true);
         setErrorMaterias(null);
         
@@ -55,21 +52,16 @@ const DashboardEstudiante: React.FC = () => {
             // Obtener todas las materias
             const todasLasMateriasRes = await listarMaterias();
             const todasLasMaterias = todasLasMateriasRes.data;
-            console.log('Todas las materias:', todasLasMaterias);
             
             // Obtener las materias asignadas al usuario
-            console.log('Llamando a listarMateriasPorUsuario con userId:', userId);
             const materiasUsuarioRes = await listarMateriasPorUsuario(String(userId));
             const materiasUsuario = materiasUsuarioRes.data;
-            console.log('Respuesta completa de materias del usuario:', materiasUsuarioRes);
-            console.log('Materias del usuario:', materiasUsuario);
             
             // Filtrar las materias que están asignadas al usuario
             const materiasAsignadas = todasLasMaterias.filter(materia => 
                 materiasUsuario.some((m: MateriaUsuario) => m.nombreMateria === materia.nombreMateria)
             );
             
-            console.log('Materias asignadas procesadas:', materiasAsignadas);
             setMaterias(materiasAsignadas);
         } catch (error) {
             console.error('Error cargando materias:', error);
