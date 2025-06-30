@@ -163,10 +163,6 @@ const DashboardEstudiante: React.FC = () => {
         loadRegistrosYFormularios();
     }, [loadRegistrosYFormularios]);
 
-    // Filtrado de pendientes
-    const pendientes = registros.filter(r => (r.estado || r.status || '').toString().toUpperCase() === 'PENDIENTE');
-    console.log('Registros pendientes:', pendientes);
-
     // Función helper para obtener el nombre de la actividad
     const getNombreActividad = (idActividad: string | number): string => {
         // Acepta idActividad como string o número
@@ -359,72 +355,6 @@ const DashboardEstudiante: React.FC = () => {
         }
     };
 
-    // Tabla de registros pendientes
-    const tablaPendientes = (
-        <div className="bg-white rounded-lg shadow overflow-hidden mt-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Registros Pendientes</h2>
-            </div>
-            {pendientes.length === 0 ? (
-                <div className="p-8 text-center">
-                    <p className="text-gray-500">No tienes registros pendientes.</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horario</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Materia</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actividad</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aula</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horas</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {pendientes.map((registro) => (
-                                <tr key={registro.idRegistro} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(registro.fechaRegistro)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(registro.horaInicio)} - {formatTime(registro.horaFin)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getNombreMateria(registro.idFormulario)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreActividad || getNombreActividad(registro.idActividad)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.aula}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.horasEfectivas}h</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getEstadoColor(registro.estado)}`}>{registro.estado}</span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <div className="flex space-x-2">
-                                            <button
-                                                onClick={() => handleEdit(registro)}
-                                                className="text-blue-600 hover:text-blue-900"
-                                                title="Editar"
-                                                disabled={registro.estado !== 'PENDIENTE'}
-                                            >
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(registro.idRegistro)}
-                                                className="text-red-600 hover:text-red-900"
-                                                title="Eliminar"
-                                                disabled={registro.estado !== 'PENDIENTE'}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    );
-
     return (
         <div className="space-y-6 p-6">
             {/* Header */}
@@ -443,14 +373,10 @@ const DashboardEstudiante: React.FC = () => {
             </div>
 
             {/* Estadísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white p-4 rounded-lg shadow">
                     <h3 className="text-sm font-medium text-gray-500">Total de Registros</h3>
                     <p className="text-2xl font-bold text-gray-900">{registros.length}</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow">
-                    <h3 className="text-sm font-medium text-gray-500">Pendientes</h3>
-                    <p className="text-2xl font-bold text-yellow-600">{pendientes.length}</p>
                 </div>
                 <div className="bg-white p-4 rounded-lg shadow">
                     <h3 className="text-sm font-medium text-gray-500">Horas Totales</h3>
@@ -559,8 +485,6 @@ const DashboardEstudiante: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            {tablaPendientes}
 
             {/* Modal para crear/editar registro */}
             {modalOpen && (
