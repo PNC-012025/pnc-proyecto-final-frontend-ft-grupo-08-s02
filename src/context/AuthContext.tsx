@@ -31,8 +31,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           const userRes = await api.get(`/api/usuarios/data/${userId}`);
           const user = userRes.data;
-          localStorage.setItem('user', JSON.stringify(user));
-          setUser(user);
+          
+          // Debug: Ver qué está devolviendo el backend
+          console.log('🔍 Debug - Datos del usuario desde backend:', user);
+          
+          // Mapear el rol correctamente
+          let mappedUser = { ...user };
+          
+          // Si el backend devuelve id_rol en lugar de rol, mapearlo
+          if (user.id_rol !== undefined && !user.rol) {
+            const roleMap: { [key: number]: string } = {
+              1: 'ENCARGADO',
+              2: 'INSTRUCTOR_NORMAL', 
+              3: 'INSTRUCTOR_REMUNERADO'
+            };
+            mappedUser.rol = roleMap[user.id_rol] || 'INSTRUCTOR_NORMAL';
+            console.log('🔍 Debug - Rol mapeado:', { id_rol: user.id_rol, rol: mappedUser.rol });
+          }
+          
+          // Si el rol sigue siendo undefined, asignar ENCARGADO por defecto para el usuario 1001
+          if (!mappedUser.rol && user.idUsuario === '1001') {
+            mappedUser.rol = 'ENCARGADO';
+            console.log('🔍 Debug - Rol asignado por defecto para usuario 1001:', mappedUser.rol);
+          }
+          
+          localStorage.setItem('user', JSON.stringify(mappedUser));
+          setUser(mappedUser);
         } catch (err: any) {
           console.error('Error verificando token:', err);
           
@@ -78,9 +102,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const userRes = await api.get(`/api/usuarios/data/${userId}`);
         const user = userRes.data;
-
-        localStorage.setItem('user', JSON.stringify(user));
-        setUser(user);
+        
+        // Debug: Ver qué está devolviendo el backend
+        console.log('🔍 Debug - Datos del usuario desde backend:', user);
+        
+        // Mapear el rol correctamente
+        let mappedUser = { ...user };
+        
+        // Si el backend devuelve id_rol en lugar de rol, mapearlo
+        if (user.id_rol !== undefined && !user.rol) {
+          const roleMap: { [key: number]: string } = {
+            1: 'ENCARGADO',
+            2: 'INSTRUCTOR_NORMAL', 
+            3: 'INSTRUCTOR_REMUNERADO'
+          };
+          mappedUser.rol = roleMap[user.id_rol] || 'INSTRUCTOR_NORMAL';
+          console.log('🔍 Debug - Rol mapeado:', { id_rol: user.id_rol, rol: mappedUser.rol });
+        }
+        
+        // Si el rol sigue siendo undefined, asignar ENCARGADO por defecto para el usuario 1001
+        if (!mappedUser.rol && user.idUsuario === '1001') {
+          mappedUser.rol = 'ENCARGADO';
+          console.log('🔍 Debug - Rol asignado por defecto para usuario 1001:', mappedUser.rol);
+        }
+        
+        localStorage.setItem('user', JSON.stringify(mappedUser));
+        setUser(mappedUser);
 
         navigate('/dashboard');
       } else {

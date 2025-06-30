@@ -13,7 +13,7 @@ import {
     actualizarRegistroHora,
     eliminarRegistro,
 } from '../../services/registroHoraService';
-import type { Materia, RegistroHora, RegistroDTO, MateriaUsuario, Actividad, Formulario } from '../../types';
+import type { Materia, RegistroHora, RegistroDTO, MateriaUsuario, Actividad, Formulario, FormularioDTO } from '../../types';
 
 const DashboardEstudiante: React.FC = () => {
     const { user } = useAuth();
@@ -111,7 +111,7 @@ const DashboardEstudiante: React.FC = () => {
 
             const pad = (n: number) => n.toString().padStart(2, '0');
             const getValue = (val: any) => Array.isArray(val) ? val[0] : val;
-            const registrosConEstado = registrosRes.data.map(registro => {
+            const registrosConEstado = registrosRes.data.map((registro: any) => {
                 const formulario = formulariosRes.data.find(f => 
                     String(f.idFormulario) === String(getValue(registro.id_formulario) ?? getValue(registro.idFormulario))
                 );
@@ -134,15 +134,21 @@ const DashboardEstudiante: React.FC = () => {
                     idFormulario: getValue(registro.id_formulario) ?? getValue(registro.idFormulario),
                     horasEfectivas: getValue(registro.horas_efectivas) ?? getValue(registro.horasEfectivas),
                     fechaRegistro,
-                    estado: formulario ? formulario.estado : undefined,
+                    estado: getValue(registro.estado) ?? (formulario ? formulario.estado : 'PENDIENTE'),
                     nombreActividad: registro.nombreActividad // si existe
                 };
             });
-            setRegistros(registrosConEstado);
-            localStorage.setItem('registros', JSON.stringify(registrosConEstado));
-            console.log('Registros cargados:', registrosConEstado);
-            if (registrosConEstado && registrosConEstado.length > 0) {
-                console.log('Ejemplo de registro:', registrosConEstado[0]);
+
+            // Filtrar solo registros con estado PENDIENTE para el dashboard
+            const registrosPendientes = registrosConEstado.filter(registro => 
+                registro.estado === 'PENDIENTE' || !registro.estado
+            );
+
+            setRegistros(registrosPendientes);
+            localStorage.setItem('registros', JSON.stringify(registrosConEstado)); // Guardar todos para histórico
+            console.log('Registros pendientes cargados:', registrosPendientes);
+            if (registrosPendientes && registrosPendientes.length > 0) {
+                console.log('Ejemplo de registro pendiente:', registrosPendientes[0]);
             }
             setFormularios(formulariosRes.data);
         } catch (error) {
@@ -150,8 +156,12 @@ const DashboardEstudiante: React.FC = () => {
             const local = localStorage.getItem('registros');
             if (local) {
                 const registrosLocal = JSON.parse(local);
-                setRegistros(registrosLocal);
-                console.log('Registros cargados desde localStorage:', registrosLocal);
+                // Filtrar solo pendientes del localStorage también
+                const registrosPendientes = registrosLocal.filter((registro: any) => 
+                    registro.estado === 'PENDIENTE' || !registro.estado
+                );
+                setRegistros(registrosPendientes);
+                console.log('Registros pendientes cargados desde localStorage:', registrosPendientes);
             }
             console.error('Error cargando registros o formularios:', error);
         } finally {
@@ -166,7 +176,7 @@ const DashboardEstudiante: React.FC = () => {
     // Función helper para obtener el nombre de la actividad
     const getNombreActividad = (idActividad: string | number): string => {
         // Acepta idActividad como string o número
-        const id = typeof idActividad === 'string' ? parseInt(idActividad) : idActividad;
+        const id = typeof idActividad === 'string' ? idActividad : String(idActividad);
         const actividad = actividades.find(a => a.idActividad === id);
         return actividad ? actividad.nombreActividad : idActividad ? String(idActividad) : '—';
     };
@@ -223,9 +233,9 @@ const DashboardEstudiante: React.FC = () => {
                 idFormularioParaRegistro = parseInt(formularioExistente.idFormulario);
             } else {
                 // Crear un formulario temporal
-                const formularioDTO = {
+                const formularioDTO: FormularioDTO = {
                     fechaCreacion: new Date().toISOString().split('T')[0],
-                    estado: 'PENDIENTE',
+                    estado: 'PENDIENTE' as const,
                     codigoUsuario: userCode
                 };
 
@@ -454,8 +464,8 @@ const DashboardEstudiante: React.FC = () => {
                                             {registro.horasEfectivas}h
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getEstadoColor(registro.estado)}`}>
-                                                {registro.estado}
+                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getEstadoColor(registro.estado || 'PENDIENTE')}`}>
+                                                {registro.estado || 'PENDIENTE'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -599,7 +609,7 @@ const DashboardEstudiante: React.FC = () => {
                                         onChange={(e) => setForm(prev => ({ ...prev, aula: e.target.value }))}
                                         placeholder="Ej: L-3, Aula 101"
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            required
+                                required
                         />
                                 </div>
 
