@@ -17,3 +17,4 @@ export const actualizarFormulario = (id: string, data: FormularioDTO) =>
 export const eliminarFormulario = (id: string) =>
     api.delete<void>(`${endpoints.formularios}/${id}`);
 
+// Conexion exitosa 
