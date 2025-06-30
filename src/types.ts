@@ -18,7 +18,8 @@ export interface Usuario {
     nombre: string;
     apellido: string;
     correo: string;
-    rol: Rol;
+    rol?: Rol; // Opcional porque el backend puede devolver id_rol
+    id_rol?: number; // Campo que devuelve el backend
 }
 
 // Extiende Usuario con las materias asignadas (para el encargado)
@@ -103,12 +104,13 @@ export interface RegistroHora {
     fechaRegistro:  string;
     horaInicio:     string;
     horaFin:        string;
-    actividad:      string;
+    actividad?:     string;
     aula:           string;
     horasEfectivas: number;
-    estado:         'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-    nombreActividad:string;
+    estado?:        'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+    nombreActividad?:string;
     idFormulario:   string;
+    idActividad:    string;
     codigoUsuario:  string;
 }
 

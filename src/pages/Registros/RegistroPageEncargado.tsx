@@ -46,22 +46,22 @@ const RegistroPageEncargado: React.FC = () => {
 
     // Helpers para datos
     const getCodigoEstudiante = (r: RegistroLocal) => {
-        const u = usuarios.find(u => u.id === r.estudianteId);
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
         return u ? u.codigoUsuario : r.estudianteId;
     };
     const getNombreEstudiante = (r: RegistroLocal) => {
-        const u = usuarios.find(u => u.id === r.estudianteId);
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
         return u ? `${u.nombre} ${u.apellido}` : r.estudianteId;
     };
     const getMateriaEstudiante = (r: RegistroLocal) => {
-        const u = usuarios.find(u => u.id === r.estudianteId);
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
         if (!u || !u.materiaId) return '—';
-        const m = materias.find(m => m.id === u.materiaId);
-        return m ? m.nombre : '—';
+        const m = materias.find(m => m.idMateria === u.materiaId);
+        return m ? m.nombreMateria : '—';
     };
     const getTipoInstructor = (r: RegistroLocal) => {
-        const u = usuarios.find(u => u.id === r.estudianteId);
-        return u?.rol === 'INSTRUCTOR_SOCIAL' ? 'SOCIAL' : 'REMUNERADA';
+        const u = usuarios.find(u => u.idUsuario === r.estudianteId);
+        return u?.rol === 'INSTRUCTOR_NORMAL' ? 'SOCIAL' : 'REMUNERADA';
     };
 
     // Filtrado
