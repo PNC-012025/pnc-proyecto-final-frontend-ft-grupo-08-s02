@@ -6,7 +6,7 @@ import { LayoutContext } from './Layout';
 import ucaBg from '../assets/sidebar/uca.png';
 
 const Sidebar: React.FC = () => {
-    const { user, logout } = useAuth();
+    const { user, signout } = useAuth();
     const { pathname } = useLocation();
     const { collapsed } = useContext(LayoutContext);
 
@@ -43,7 +43,7 @@ const Sidebar: React.FC = () => {
                     <p className="font-bold">{user?.nombre}</p>
                     <p className="text-xs flex items-center gap-1">
                         <span className="material-icons text-sm">Email: </span>
-                        {user?.email}
+                        {user?.correo}
                     </p>
                 </div>
             </div>

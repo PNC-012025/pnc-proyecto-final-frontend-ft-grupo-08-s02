@@ -1,97 +1,114 @@
-import React, { createContext, useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
-import type { UsuarioLoginDTO, Usuario } from '../types';
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import type { Usuario, UsuarioLoginDTO } from '../types';
+import api from '../services/api';
+import { login as loginRequest } from '../services/authService';
 
-interface AuthContextProps {
-    user: Usuario | null;
-    login: (data: UsuarioLoginDTO) => Promise<void>;
-    logout: () => void;
+export interface AuthContextProps {
+  user: Usuario | null;
+  signin: (creds: UsuarioLoginDTO) => Promise<void>;
+  signout: () => void;
+  loading: boolean;
+  updateUser: (updatedUser: Usuario) => void;
 }
 
-const AuthContext = createContext<AuthContextProps>({
-    user: null,
-    login: async () => { },
-    logout: () => { },
-});
+const AuthContext = createContext<AuthContextProps>({} as AuthContextProps);
 
-interface AuthProviderProps {
-    children: ReactNode;
-}
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<Usuario | null>(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-    const [user, setUser] = useState<Usuario | null>(null);
-    const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const verifyToken = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const payloadBase64 = token.split('.')[1];
+          const decodedPayload = JSON.parse(atob(payloadBase64));
+          const userId = decodedPayload.id;
 
-    useEffect(() => {
-        const u = localStorage.getItem('user');
-        if (u) setUser(JSON.parse(u));
-        setLoading(false);
-    }, []);
-
-    const login = async (credentials: UsuarioLoginDTO) => {
-        const { email, password } = credentials;
-
-        // Cuenta fija de Encargado
-        if (email === 'admin@uca.edu.sv' && password === '1234') {
-            const fake: Usuario = {
-                id: '1',
-                nombre: 'Admin',
-                apellido: 'Demo',
-                email,
-                rol: 'ENCARGADO',
-                codigoUsuario: 'ADM001',
-            };
-            localStorage.setItem('token', 'FAKE-TOKEN');
-            localStorage.setItem('user', JSON.stringify(fake));
-            setUser(fake);
-            return;
+          const userRes = await api.get(`/api/usuarios/data/${userId}`);
+          const user = userRes.data;
+          localStorage.setItem('user', JSON.stringify(user));
+          setUser(user);
+        } catch (err: any) {
+          console.error('Error verificando token:', err);
+          
+          // Solo limpiar datos de sesión y redirigir si es un error de autenticación real
+          // (401 Unauthorized, 403 Forbidden, o token inválido)
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+            
+            if (location.pathname !== '/login') {
+              navigate('/login');
+            }
+          } else if (err.response?.status === 404) {
+            // Si el usuario no se encuentra (404), podría ser que se eliminó
+            // pero mantenemos la sesión activa por si es un error temporal
+            console.warn('Usuario no encontrado, pero manteniendo sesión activa');
+          } else if (err.response?.status === 0 || err.code === 'NETWORK_ERROR') {
+            // Error de red, mantener la sesión activa
+            console.warn('Error de red, manteniendo sesión activa');
+          } else {
+            // Para otros errores (500, etc.), mantener la sesión activa
+            console.warn('Error del servidor, manteniendo sesión activa:', err.response?.status);
+          }
         }
-
-        // Cuenta fija de Estudiante de prueba
-        if (email === 'estudiante@uca.edu.sv' && password === '1234') {
-            const fake: Usuario = {
-                id: '2',
-                nombre: 'Estudiante',
-                apellido: 'Ejemplo',
-                email,
-                rol: 'ESTUDIANTE',
-                codigoUsuario: 'EST001',
-            };
-            localStorage.setItem('token', 'FAKE-TOKEN');
-            localStorage.setItem('user', JSON.stringify(fake));
-            setUser(fake);
-            return;
-        }
-
-        // Cuentas dinámicas
-        const usuarios: Usuario[] = JSON.parse(localStorage.getItem('usuarios') || '[]');
-        const pwMap: Record<string, string> = JSON.parse(localStorage.getItem('passwords') || '{}');
-        const match = usuarios.find(u => u.email === email);
-        if (match && pwMap[email] === password) {
-            localStorage.setItem('token', 'FAKE-TOKEN');
-            localStorage.setItem('user', JSON.stringify(match));
-            setUser(match);
-            return;
-        }
-
-        throw new Error('Credenciales inválidas');
+      }
+      setLoading(false); 
     };
 
-    const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
-    };
+    verifyToken();
+  }, [navigate, location.pathname]);
 
-    if (loading) {
-        return <div className="flex items-center justify-center min-h-screen">Cargando...</div>;
+  const signin = async (creds: UsuarioLoginDTO) => {
+    try {
+      const res = await loginRequest(creds);
+      if (res.data?.state && res.data?.result) {
+        const token = res.data.result;
+        localStorage.setItem('token', token);
+
+        const payloadBase64 = token.split('.')[1];
+        const decodedPayload = JSON.parse(atob(payloadBase64));
+        const userId = decodedPayload.id;
+
+        const userRes = await api.get(`/api/usuarios/data/${userId}`);
+        const user = userRes.data;
+
+        localStorage.setItem('user', JSON.stringify(user));
+        setUser(user);
+
+        navigate('/dashboard');
+      } else {
+        throw new Error('Respuesta inválida del servidor');
+      }
+    } catch (error) {
+      console.error('Error de autenticación:', error);
+      throw new Error('Autenticación fallida: Credenciales inválidas o error del servidor');
     }
+  };
 
-    return (
-        <AuthContext.Provider value={{ user, login, logout }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  const signout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    navigate('/login');
+  };
+
+  const updateUser = (updatedUser: Usuario) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, signin, signout, loading, updateUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export default AuthContext;

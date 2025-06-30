@@ -1,6 +1,15 @@
 import api from './api';
+import endpoints from '../utils/endpoints';
 import type { UsuarioLoginDTO, LoginResponse } from '../types';
 
-export const login = (data: UsuarioLoginDTO): Promise<LoginResponse> => {
-    return api.post(endpoints.auth, data).then(res => res.data);
-};
+interface LoginResponseAPI {
+  state: boolean;
+  message: string;
+  result: string;      
+}
+
+export function login(creds: UsuarioLoginDTO) {
+  return api.post<LoginResponseAPI>(endpoints.auth, creds);
+}
+
+

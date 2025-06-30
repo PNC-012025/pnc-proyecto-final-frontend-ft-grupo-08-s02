@@ -1,27 +1,32 @@
+// Roles admitidos
+export type Rol = 'ENCARGADO' | 'INSTRUCTOR_NORMAL' | 'INSTRUCTOR_REMUNERADO';
 
-export type Role = 'ESTUDIANTE' | 'INSTRUCTOR_SOCIAL' | 'INSTRUCTOR_REMUNERADO' | 'ENCARGADO';
-
-// Datos para crear o actualizar un usuario
+// DTO para crear/actualizar un usuario
 export interface UsuarioDTO {
+    codigoUsuario: string;
     nombre: string;
     apellido: string;
-    email: string;
-    password: string;
-    rol: Role;
-    codigoUsuario: string;
+    correo: string;
+    contrasena: string;
+    rol: Rol;
 }
 
-// Usuario retornado por la API
+// Usuario que viene de la API
 export interface Usuario {
-    id: string;
+    idUsuario: string;
+    codigoUsuario: string;
     nombre: string;
     apellido: string;
-    email: string;
-    rol: Role;
-    codigoUsuario: string;
+    correo: string;
+    rol: Rol;
 }
 
-// DTO para el login
+// Extiende Usuario con las materias asignadas (para el encargado)
+export interface UsuarioConMaterias extends Usuario {
+    materiaIds: string[];
+}
+
+// DTO para login
 export interface UsuarioLoginDTO {
     email: string;
     password: string;
@@ -33,86 +38,94 @@ export interface LoginResponse {
     usuario: Usuario;
 }
 
-// Datos para crear o actualizar una materia
+// DTO para crear/actualizar una materia
 export interface MateriaDTO {
-    nombre: string;
+    // El backend espera { nombre: string }
+    nombreMateria: string;
 }
 
-// Materia retornada por la API
+// Materia que viene de la API
 export interface Materia {
-    id: string;
-    nombre: string;
-}
-
-// Asociación Usuario-Materia
-export interface UsuarioMateria {
-    idUsuario: string;
     idMateria: string;
+    nombreMateria: string;
 }
 
-// Datos para crear o actualizar una actividad
+// Respuesta del servicio de materias por usuario
+export interface MateriaUsuario {
+    idUsuarioXMateria: string;
+    nombreMateria: string;
+    idMateria?: string;
+}
+
+// DTO para crear/actualizar una actividad
 export interface ActividadDTO {
     nombreActividad: string;
     tipo: 'SOCIAL' | 'REMUNERADA';
 }
 
-// Actividad retornada por la API
+// Actividad que viene de la API
 export interface Actividad {
-    id: string;
+    idActividad: string;
     nombreActividad: string;
     tipo: 'SOCIAL' | 'REMUNERADA';
 }
 
-// Datos para crear un formulario de registro de horas
+// DTO para formulario de horas (corregido según Postman)
 export interface FormularioDTO {
-    idUsuario: string;
-    semana: number;
-    estado?: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-}
-
-// Formulario retornado por la API
-export interface Formulario {
-    id: string;
-    idUsuario: string;
     fechaCreacion: string;
-    semana: number;
-    estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+    estado: 'PENDIENTE' | 'APROBADO' | 'DENEGADO';
+    codigoUsuario: string;
 }
 
-// Datos para crear o actualizar un registro de hora
+// Formulario que viene de la API
+export interface Formulario {
+    idFormulario: string;
+    fechaCreacion: string;
+    estado: 'PENDIENTE' | 'APROBADO' | 'DENEGADO';
+    codigoUsuario: string;
+}
+
+// DTO para registro de hora (corregido según Postman)
 export interface RegistroDTO {
-    idFormulario: string;
-    idActividad: string;
-    fecha: string;
-    horaInicio: string;
-    horaFin: string;
-}
-
-// Registro de hora retornado por la API
-export interface RegistroHora {
-    id: string;
-    idFormulario: string;
-    idActividad: string;
-    fecha: string;
-    horaInicio: string;
-    horaFin: string;
+    fechaRegistro:  string;
+    horaInicio:     string;
+    horaFin:        string;
     horasEfectivas: number;
+    aula:           string;
+    codigoUsuario:  string;
+    idFormulario:   number; // El backend siempre espera un número
+    idActividad:    number;
 }
 
-// Datos para crear o actualizar una validación de formulario
+// Registro de hora que viene de la API
+export interface RegistroHora {
+    idRegistro:     string;
+    fechaRegistro:  string;
+    horaInicio:     string;
+    horaFin:        string;
+    actividad:      string;
+    aula:           string;
+    horasEfectivas: number;
+    estado:         'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+    nombreActividad:string;
+    idFormulario:   string;
+    codigoUsuario:  string;
+}
+
+// DTO para validación de formulario
 export interface ValidacionDTO {
     idFormulario: string;
-    idEncargado: string;
-    estado: 'APROBADO' | 'RECHAZADO';
+    idEncargado:  string;
+    estado:       'APROBADO' | 'DENEGADO';
     observacion?: string;
 }
 
-// Validación retornada por la API
+// Validación que viene de la API
 export interface Validacion {
-    id: string;
-    idFormulario: string;
-    idEncargado: string;
-    fechaValidacion: string;
-    estado: 'APROBADO' | 'RECHAZADO';
-    observacion?: string;
+    idValidacion:   string;
+    idFormulario:   string;
+    idEncargado:    string;
+    fechaValidacion:string;
+    estado:         'APROBADO' | 'DENEGADO';
+    observacion?:   string;
 }
