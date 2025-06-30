@@ -12,7 +12,7 @@ interface RegistroLocal {
 
 const Header: React.FC = () => {
     const { toggleSidebar } = useLayout();
-    const { user, logout } = useAuth();
+    const { user, signout } = useAuth();
     const navigate = useNavigate();
 
     const [notifications, setNotifications] = useState<RegistroLocal[]>([]);
@@ -29,7 +29,7 @@ const Header: React.FC = () => {
         if (user?.rol === 'ENCARGADO') {
             nots = data.filter(r => r.estado === 'PENDIENTE');
         } else {
-            nots = data.filter(r => r.estudianteId === user?.id && r.estado !== 'PENDIENTE');
+            nots = data.filter(r => r.estudianteId === user?.nombre && r.estado !== 'PENDIENTE');
         }
         setNotifications(nots);
     }, [user]);
@@ -130,10 +130,10 @@ const Header: React.FC = () => {
                                 <UserCircle size={25} className="text-gray-600" />
                                 <div className="flex flex-col text-sm">
                                     <span className="font-medium text-gray-800">{user?.nombre}</span>
-                                    <span className="text-gray-600 break-all text-xs">{user?.email}</span>
+                                    <span className="text-gray-600 break-all text-xs">{user?.correo}</span>
                                 </div>
                             </div>
-                            <button onClick={logout} className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100 transition">
+                            <button onClick={signout} className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100 transition">
                                 <XCircle size={16} className="text-red-600" />
                                 <span className="text-sm text-red-600">Cerrar sesión</span>
                             </button>

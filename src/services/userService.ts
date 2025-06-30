@@ -1,28 +1,23 @@
 import api from './api';
 import endpoints from '../utils/endpoints';
-import type { UsuarioDTO, Usuario } from '../types';
+import type { Usuario, UsuarioDTO } from '../types';
 
-export const crearUsuario = (usuario: UsuarioDTO) =>
-    api.post<Usuario>(endpoints.usuarios, usuario);
+// Obtener todos los usuarios
+export const listarUsuarios = () => {
+    return api.get<Usuario[]>(endpoints.usuarios);
+};
 
-export const obtenerUsuarioPorId = (id: string) =>
-    api.get<Usuario>(`${endpoints.usuarios}/${id}`);
+// Crear usuario
+export const crearUsuario = (dto: UsuarioDTO) => {
+    return api.post<Usuario>(endpoints.saveUsuario, dto);
+};
 
-export const listarUsuarios = () =>
-    api.get<Usuario[]>(endpoints.usuarios);
+// Actualizar usuario
+export const actualizarUsuario = (idUsuario: string, dto: UsuarioDTO) => {
+    return api.put<Usuario>(`${endpoints.updateUsuario}/${idUsuario}`, dto);
+};
 
-export const actualizarUsuario = (id: string, usuario: UsuarioDTO) =>
-    api.put<Usuario>(`${endpoints.usuarios}/${id}`, usuario);
-
-export const eliminarUsuario = (id: string) =>
-    api.delete<void>(`${endpoints.usuarios}/${id}`);
-
-// Específicos
-export const obtenerUsuariosPorRol = (rol: string) =>
-    api.get<Usuario[]>(`${endpoints.usuarios}/rol/${rol}`);
-
-export const buscarPorCodigo = (codigo: string) =>
-    api.get<Usuario[]>(`${endpoints.usuarios}/codigo/${codigo}`);
-
-export const listarUsuariosPorMateria = (idMateria: string) =>
-    api.get<Usuario[]>(`${endpoints.usuarios}/materia/${idMateria}`);
+// Eliminar usuario
+export const eliminarUsuario = (idUsuario: string) => {
+    return api.delete<void>(`${endpoints.deleteUsuario}/${idUsuario}`);
+};

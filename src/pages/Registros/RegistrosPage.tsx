@@ -22,7 +22,7 @@ interface CatMateria { id: string; nombre: string; }
 const RegistrosPage: React.FC = () => {
   const { user } = useAuth();
   const userId = (user as any)?.codigoUsuario ?? user?.id ?? '';
-  const canFilter = /(?:INSTRUCTOR_SOCIAL|INSTRUCTOR_REMUNERADO)/i.test(user?.rol ?? '');
+  const canFilter = /(?:INSTRUCTOR_NORMAL|INSTRUCTOR_REMUNERADO)/i.test(user?.rol ?? '');
 
   /* materias y materia seleccionada */
   const [materias, setMaterias]     = useState<CatMateria[]>([]);

@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-    BrowserRouter,
-    Routes,
-    Route,
-    Navigate,
-} from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import Login from '../pages/Login/Login';
 import useAuth from '../hooks/useAuth';
@@ -16,9 +11,12 @@ import RegistroPageEncargado from '../pages/Registros/RegistroPageEncargado';
 import ValidacionesPage from '../pages/Validaciones/Validaciones';
 
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
+
+    if (loading) return <div className="p-8 text-center">Cargando...</div>; 
     return user ? children : <Navigate to="/login" replace />;
 };
+
 
 const DashboardRouter: React.FC = () => {
     const { user } = useAuth();
@@ -29,35 +27,26 @@ const DashboardRouter: React.FC = () => {
 };
 
 const AppRoutes: React.FC = () => (
-    <BrowserRouter>
-        <Routes>
-            <Route path="/login" element={<Login />} />
+    <Routes>
+        <Route path="/login" element={<Login />} />
 
-            <Route
-                path="/dashboard/*"
-                element={
-                    <PrivateRoute>
-                        <Layout />
-                    </PrivateRoute>
-                }
-            >
-                {/* Página principal según rol */}
-                <Route index element={<DashboardRouter />} />
-
-                {/* Rutas compartidas */}
-                <Route path="registros" element={<RegistrosPage />} />
-
-                {/* Encargado */}
-                <Route path="validaciones" element={<ValidacionesPage />} />
-                <Route path="historico" element={<RegistroPageEncargado />} />
-
-                {/* Cualquier otra → al login */}
-                <Route path="*" element={<Navigate to="/login" replace />} />
-            </Route>
-
+        <Route
+            path="/dashboard/*"
+            element={
+                <PrivateRoute>
+                    <Layout />
+                </PrivateRoute>
+            }
+        >
+            <Route index element={<DashboardRouter />} />
+            <Route path="registros" element={<RegistrosPage />} />
+            <Route path="validaciones" element={<ValidacionesPage />} />
+            <Route path="historico" element={<RegistroPageEncargado />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-    </BrowserRouter>
+        </Route>
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
 );
 
 export default AppRoutes;
