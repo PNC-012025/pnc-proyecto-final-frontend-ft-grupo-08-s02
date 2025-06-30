@@ -79,20 +79,17 @@ const DashboardEstudiante: React.FC = () => {
         try {
             const actividadesRes = await listarActividades();
             const todasLasActividades = actividadesRes.data;
-            
             // Filtrar actividades según el rol del usuario
             const actividadesFiltradas = todasLasActividades.filter(actividad => {
                 if (user?.rol === 'INSTRUCTOR_NORMAL') {
-                    // Solo mostrar actividades para INSTRUCTOR_NORMAL
                     return ['APOYO_PRACTICAS_LABORATORIO', 'CONSULTAS', 'APOYO_CLASE', 'APOYO_EN_PARCIAL'].includes(actividad.nombreActividad);
                 } else if (user?.rol === 'INSTRUCTOR_REMUNERADO') {
-                    // Solo mostrar actividades para INSTRUCTOR_REMUNERADO
                     return ['PRACTICA_LABORATORIO', 'PERMANENCIA', 'APOYO_PARCIAL', 'APOYO_INFORMATICO'].includes(actividad.nombreActividad);
                 }
-                return false; // Si no es instructor, no mostrar actividades
+                return false;
             });
-            
             setActividades(actividadesFiltradas);
+            console.log('Actividades cargadas:', actividadesFiltradas);
         } catch (error) {
             console.error('Error cargando actividades:', error);
         }
@@ -112,10 +109,50 @@ const DashboardEstudiante: React.FC = () => {
                 listarFormulariosPorUsuario(String(userId)),
             ]);
 
-            setRegistros(registrosRes.data);
-            console.log('Registros cargados:', registrosRes.data);
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const getValue = (val: any) => Array.isArray(val) ? val[0] : val;
+            const registrosConEstado = registrosRes.data.map(registro => {
+                const formulario = formulariosRes.data.find(f => 
+                    String(f.idFormulario) === String(getValue(registro.id_formulario) ?? getValue(registro.idFormulario))
+                );
+                // Formatear fecha y hora si vienen como número
+                let fechaRegistro = getValue(registro.fecha_registro) ?? getValue(registro.fechaRegistro);
+                if (typeof fechaRegistro === 'number') fechaRegistro = `${fechaRegistro}-01-01`;
+
+                let horaInicio = getValue(registro.hora_inicio) ?? getValue(registro.horaInicio);
+                if (typeof horaInicio === 'number') horaInicio = `${pad(horaInicio)}:00:00`;
+
+                let horaFin = getValue(registro.hora_fin) ?? getValue(registro.horaFin);
+                if (typeof horaFin === 'number') horaFin = `${pad(horaFin)}:00:00`;
+
+                return {
+                    ...registro,
+                    idRegistro: getValue(registro.id_registro_hora) ?? getValue(registro.idRegistro),
+                    horaInicio,
+                    horaFin,
+                    idActividad: getValue(registro.id_actividad) ?? getValue(registro.idActividad),
+                    idFormulario: getValue(registro.id_formulario) ?? getValue(registro.idFormulario),
+                    horasEfectivas: getValue(registro.horas_efectivas) ?? getValue(registro.horasEfectivas),
+                    fechaRegistro,
+                    estado: formulario ? formulario.estado : undefined,
+                    nombreActividad: registro.nombreActividad // si existe
+                };
+            });
+            setRegistros(registrosConEstado);
+            localStorage.setItem('registros', JSON.stringify(registrosConEstado));
+            console.log('Registros cargados:', registrosConEstado);
+            if (registrosConEstado && registrosConEstado.length > 0) {
+                console.log('Ejemplo de registro:', registrosConEstado[0]);
+            }
             setFormularios(formulariosRes.data);
         } catch (error) {
+            // Si falla la API, intenta cargar desde localStorage
+            const local = localStorage.getItem('registros');
+            if (local) {
+                const registrosLocal = JSON.parse(local);
+                setRegistros(registrosLocal);
+                console.log('Registros cargados desde localStorage:', registrosLocal);
+            }
             console.error('Error cargando registros o formularios:', error);
         } finally {
             setLoadingRegistros(false);
@@ -128,11 +165,14 @@ const DashboardEstudiante: React.FC = () => {
 
     // Filtrado de pendientes
     const pendientes = registros.filter(r => (r.estado || r.status || '').toString().toUpperCase() === 'PENDIENTE');
+    console.log('Registros pendientes:', pendientes);
 
     // Función helper para obtener el nombre de la actividad
-    const getNombreActividad = (idActividad: number): string => {
-        const actividad = actividades.find(a => a.idActividad === idActividad);
-        return actividad ? actividad.nombreActividad : 'Actividad no encontrada';
+    const getNombreActividad = (idActividad: string | number): string => {
+        // Acepta idActividad como string o número
+        const id = typeof idActividad === 'string' ? parseInt(idActividad) : idActividad;
+        const actividad = actividades.find(a => a.idActividad === id);
+        return actividad ? actividad.nombreActividad : idActividad ? String(idActividad) : '—';
     };
 
     // Función helper para obtener el nombre de la materia de un registro
@@ -225,11 +265,13 @@ const DashboardEstudiante: React.FC = () => {
             const res = await action;
                 const saved = res.data as RegistroHora;
             
-                setRegistros(prev =>
-                    editing
+            setRegistros(prev => {
+                const nuevos = editing
                         ? prev.map(r => r.idRegistro === editing.idRegistro ? saved : r)
-                        : [...prev, saved]
-                );
+                    : [...prev, saved];
+                localStorage.setItem('registros', JSON.stringify(nuevos));
+                return nuevos;
+            });
                 setModalOpen(false);
                 setEditing(null);
                 setForm({
@@ -259,7 +301,12 @@ const DashboardEstudiante: React.FC = () => {
         
         eliminarRegistro(id)
             .then(() => {
-                setRegistros(prev => prev.filter(r => r.idRegistro !== id));
+                setRegistros(prev => {
+                    const nuevos = prev.filter(r => r.idRegistro !== id);
+                    localStorage.setItem('registros', JSON.stringify(nuevos));
+                    return nuevos;
+                });
+                loadRegistrosYFormularios();
                 alert('✅ Registro eliminado exitosamente');
             })
             .catch(error => {
@@ -328,8 +375,7 @@ const DashboardEstudiante: React.FC = () => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inicio</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fin</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horario</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Materia</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actividad</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aula</th>
@@ -342,10 +388,9 @@ const DashboardEstudiante: React.FC = () => {
                             {pendientes.map((registro) => (
                                 <tr key={registro.idRegistro} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(registro.fechaRegistro)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(registro.horaInicio)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(registro.horaFin)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(registro.horaInicio)} - {formatTime(registro.horaFin)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getNombreMateria(registro.idFormulario)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getNombreActividad(parseInt(registro.idActividad))}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreActividad || getNombreActividad(registro.idActividad)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.aula}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.horasEfectivas}h</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -357,6 +402,7 @@ const DashboardEstudiante: React.FC = () => {
                                                 onClick={() => handleEdit(registro)}
                                                 className="text-blue-600 hover:text-blue-900"
                                                 title="Editar"
+                                                disabled={registro.estado !== 'PENDIENTE'}
                                             >
                                                 <Edit2 size={16} />
                                             </button>
@@ -364,6 +410,7 @@ const DashboardEstudiante: React.FC = () => {
                                                 onClick={() => handleDelete(registro.idRegistro)}
                                                 className="text-red-600 hover:text-red-900"
                                                 title="Eliminar"
+                                                disabled={registro.estado !== 'PENDIENTE'}
                                             >
                                                 <Trash2 size={16} />
                                             </button>
@@ -472,7 +519,7 @@ const DashboardEstudiante: React.FC = () => {
                                             {formatTime(registro.horaInicio)} - {formatTime(registro.horaFin)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {getNombreActividad(parseInt(registro.idActividad))}
+                                            {registro.nombreActividad || getNombreActividad(registro.idActividad)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             {registro.aula}
