@@ -70,23 +70,22 @@ export interface Actividad {
     tipo: 'SOCIAL' | 'REMUNERADA';
 }
 
-// DTO para formulario de horas (no lo usamos aquí, pero lo dejamos alineado)
+// DTO para formulario de horas (corregido según Postman)
 export interface FormularioDTO {
-    idUsuario: string;
-    semana: number;
-    estado?: 'PENDIENTE' | 'APROBADO' | 'DENEGADO';
+    fechaCreacion: string;
+    estado: 'PENDIENTE' | 'APROBADO' | 'DENEGADO';
+    codigoUsuario: string;
 }
 
 // Formulario que viene de la API
 export interface Formulario {
     idFormulario: string;
-    idUsuario: string;
     fechaCreacion: string;
-    semana: number;
     estado: 'PENDIENTE' | 'APROBADO' | 'DENEGADO';
+    codigoUsuario: string;
 }
 
-// DTO para registro de hora
+// DTO para registro de hora (corregido según Postman)
 export interface RegistroDTO {
     fechaRegistro:  string;
     horaInicio:     string;
@@ -94,9 +93,8 @@ export interface RegistroDTO {
     horasEfectivas: number;
     aula:           string;
     codigoUsuario:  string;
-    // Ambos en string porque los servicios REST los reciben como ruta o query
-    idActividad:    string;
-    idFormulario:   string;
+    idFormulario:   number; // El backend siempre espera un número
+    idActividad:    number;
 }
 
 // Registro de hora que viene de la API
